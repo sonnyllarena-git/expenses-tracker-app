@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: No-network-calls policy (SECURITY.md)
+        run: |
+          if grep -rEn "fetch\(|axios|XMLHttpRequest" app components db store utils types 2>/dev/null; then
+            echo "Found a network call in app code — Phase 1 is offline-only. See SECURITY.md."
+            exit 1
+          fi
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Audit
+        run: npm audit --audit-level=critical
