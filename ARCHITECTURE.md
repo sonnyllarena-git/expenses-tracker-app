@@ -116,3 +116,7 @@ constants/
 ## 5. What's explicitly NOT built yet
 
 Feature logic for CRUD screens, budget alert scheduling, chart data wiring, CSV export, family sharing, and recurring-expense materialization are out of scope for the Week 1 scaffold — see ROADMAP.md for when each lands.
+
+## 6. Known limitation: `npm run web` cannot run this app at runtime
+
+The app **bundles** for web (`expo export --platform web` succeeds, see ADR-003's migration wiring), but running it live via `expo start --web` crashes with `SharedArrayBuffer is not defined`. `expo-sqlite`'s web backend (`wa-sqlite`) requires `SharedArrayBuffer`, which browsers only expose on pages served with `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` — headers Expo's default Metro dev server doesn't set. Fixing this means adding custom dev-server middleware to inject those headers, which is real effort for a platform this app doesn't target in Phase 1 (mobile-first; web is Phase 2+ per the original spec). **Not fixed — use Expo Go on a physical device to see the running UI instead** (see README.md).

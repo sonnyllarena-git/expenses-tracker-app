@@ -26,6 +26,8 @@ This prints a QR code in the terminal. Scan it with the Expo Go app on your phon
 
 On first launch, the app runs its SQLite migration and seeds the 7 default categories — the Dashboard tab shows "Local database: Ready" and a category count of 7 once that's done.
 
+**Don't use `npm run web` to preview the running app** — it bundles fine but crashes at runtime (`SharedArrayBuffer is not defined`, from `expo-sqlite`'s web backend; see ARCHITECTURE.md §6). Expo Go on a physical device is the actual way to see the UI in Phase 1.
+
 ## Testing & quality checks
 
 ```bash
