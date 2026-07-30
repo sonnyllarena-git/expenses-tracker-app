@@ -16,6 +16,7 @@ Phase 1 has no backend to deploy — "deployment" means shipping the mobile bina
 ## Environments
 
 Since there's no backend, there's effectively one "environment" (the app binary), but EAS build **profiles** in `eas.json` stand in for staging/production:
+
 - `development` — dev-client build for local testing with hot reload
 - `preview` — internal distribution (APK / ad-hoc iOS) for Sonny to test on a real device before wider testing
 - `production` — store-bound build
@@ -25,6 +26,7 @@ Since there's no backend, there's effectively one "environment" (the app binary)
 This section gets rewritten, not appended to, once a backend exists — at that point real staging/production environments, database migration rollout, and zero-downtime API deploys (per agent.md.md's general Deployment & DevOps section) become relevant. Flagging now so this doc doesn't silently rot: **do not reuse this doc's structure unmodified once a backend is introduced.**
 
 ## Pre-submission checklist (Week 12, not yet)
+
 - [ ] Privacy policy published (see SECURITY.md)
 - [ ] App icons + splash screen finalized in `app.json`
 - [ ] Store screenshots (iOS + Android device sizes) and description copy ready

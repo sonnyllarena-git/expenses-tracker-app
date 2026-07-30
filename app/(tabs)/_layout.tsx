@@ -11,7 +11,8 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme].accent,
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
@@ -23,9 +24,7 @@ export default function TabLayout() {
         name="add"
         options={{
           title: 'Add',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle" color={color} size={size} />
-          ),
+          tabBarIcon: ({ color, size }) => <Ionicons name="add-circle" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -39,9 +38,7 @@ export default function TabLayout() {
         name="reports"
         options={{
           title: 'Reports',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="pie-chart" color={color} size={size} />
-          ),
+          tabBarIcon: ({ color, size }) => <Ionicons name="pie-chart" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

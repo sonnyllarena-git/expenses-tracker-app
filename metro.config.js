@@ -7,4 +7,7 @@ const config = getDefaultConfig(__dirname);
 // rather than as opaque binary assets.
 config.resolver.sourceExts.push('sql');
 
+// expo-sqlite's web implementation loads a wa-sqlite .wasm binary as an asset.
+config.resolver.assetExts.push('wasm');
+
 module.exports = config;

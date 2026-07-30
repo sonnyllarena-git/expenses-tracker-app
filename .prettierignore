@@ -1,0 +1,4 @@
+node_modules/
+db/migrations/
+agent.md
+package-lock.json
