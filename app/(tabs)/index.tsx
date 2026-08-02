@@ -1,26 +1,25 @@
-import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useCategoryStore } from '@/store/useCategoryStore';
+import { useExpenseStore } from '@/store/useExpenseStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { formatCurrency } from '@/utils/currency';
+import { currentMonth } from '@/utils/date';
 
 export default function DashboardScreen() {
-  const { account, init } = useSettingsStore();
-  const { categories, load: loadCategories } = useCategoryStore();
-  const [status, setStatus] = useState('Starting up…');
+  // Account, categories, and expenses are all guaranteed loaded before this
+  // screen can render — see db/DatabaseProvider.tsx's BootstrapGate.
+  const { account } = useSettingsStore();
+  const { categories } = useCategoryStore();
+  const { expenses } = useExpenseStore();
   const colorScheme = useColorScheme();
 
-  useEffect(() => {
-    (async () => {
-      const acc = await init();
-      await loadCategories(acc.id);
-      setStatus('Ready');
-    })();
-  }, [init, loadCategories]);
+  const monthTotal = expenses
+    .filter((expense) => expense.date.startsWith(currentMonth()))
+    .reduce((sum, expense) => sum + expense.amount, 0);
 
   return (
     <View style={styles.container}>
@@ -28,8 +27,6 @@ export default function DashboardScreen() {
       <Text style={styles.subtitle}>Monthly summary, charts, and recent expenses land here.</Text>
 
       <View style={[styles.statusCard, { backgroundColor: Colors[colorScheme].card }]}>
-        <Text style={styles.statusLabel}>Local database</Text>
-        <Text style={styles.statusValue}>{status}</Text>
         {account && (
           <>
             <Text style={styles.statusLabel}>Account</Text>
@@ -38,13 +35,12 @@ export default function DashboardScreen() {
             </Text>
           </>
         )}
-        <Text style={styles.statusLabel}>Categories seeded</Text>
+        <Text style={styles.statusLabel}>Categories</Text>
         <Text style={styles.statusValue}>{categories.length}</Text>
-        {account && (
-          <Text style={styles.statusValue}>
-            This month so far: {formatCurrency(0, account.currency)}
-          </Text>
-        )}
+        <Text style={styles.statusLabel}>This month so far</Text>
+        <Text style={styles.statusValue}>
+          {formatCurrency(monthTotal, account?.currency ?? 'PHP')}
+        </Text>
       </View>
     </View>
   );

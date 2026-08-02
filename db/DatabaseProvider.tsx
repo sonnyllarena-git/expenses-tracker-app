@@ -5,6 +5,9 @@ import { StyleSheet } from 'react-native';
 import { db, initDb } from './client';
 import migrations from './migrations/migrations';
 import { Text, View } from '@/components/Themed';
+import { useCategoryStore } from '@/store/useCategoryStore';
+import { useExpenseStore } from '@/store/useExpenseStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
 
 function StatusScreen({ title, message }: { title?: string; message?: string }) {
   return (
@@ -49,6 +52,39 @@ function MigrationGate({ children }: PropsWithChildren) {
   }
 
   if (!success) {
+    return <StatusScreen />;
+  }
+
+  return <BootstrapGate>{children}</BootstrapGate>;
+}
+
+/**
+ * Loads the single local account, then its categories (seeding the 7 defaults
+ * on first launch), then its expenses — in that order, since categories and
+ * expenses both need the account's id. Runs once migrations have succeeded.
+ */
+function BootstrapGate({ children }: PropsWithChildren) {
+  const [ready, setReady] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const account = await useSettingsStore.getState().init();
+        await useCategoryStore.getState().load(account.id);
+        await useExpenseStore.getState().load(account.id);
+        setReady(true);
+      } catch (err) {
+        setBootstrapError(err instanceof Error ? err : new Error(String(err)));
+      }
+    })();
+  }, []);
+
+  if (bootstrapError) {
+    return <StatusScreen title="App failed to start" message={bootstrapError.message} />;
+  }
+
+  if (!ready) {
     return <StatusScreen />;
   }
 

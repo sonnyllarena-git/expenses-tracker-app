@@ -70,6 +70,39 @@ export async function insertExpense(input: NewExpenseInput): Promise<Expense> {
   return toExpense(created);
 }
 
+export interface UpdateExpenseInput {
+  amount?: number;
+  categoryId?: string;
+  date?: string;
+  description?: string;
+  tags?: string[];
+  receiptPhotoPath?: string | null;
+}
+
+export async function updateExpense(id: string, input: UpdateExpenseInput): Promise<Expense> {
+  if (input.amount !== undefined && input.amount <= 0) {
+    throw new Error('Expense amount must be positive');
+  }
+
+  const values: Partial<typeof expenses.$inferInsert> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (input.amount !== undefined) values.amount = input.amount;
+  if (input.categoryId !== undefined) values.categoryId = input.categoryId;
+  if (input.date !== undefined) values.date = input.date;
+  if (input.description !== undefined) values.description = input.description;
+  if (input.tags !== undefined) values.tags = JSON.stringify(input.tags);
+  if (input.receiptPhotoPath !== undefined) values.receiptPhotoPath = input.receiptPhotoPath;
+
+  const [updated] = await db.update(expenses).set(values).where(eq(expenses.id, id)).returning();
+
+  if (!updated) {
+    throw new Error(`No expense found with id ${id}`);
+  }
+
+  return toExpense(updated);
+}
+
 export async function deleteExpense(id: string): Promise<void> {
   await db.delete(expenses).where(eq(expenses.id, id));
 }
