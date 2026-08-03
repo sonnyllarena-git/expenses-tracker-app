@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import { db } from '../client';
 import { expenses } from '../schema';
@@ -36,11 +36,17 @@ export interface NewExpenseInput {
   receiptPhotoPath?: string | null;
 }
 
+/**
+ * Real expenses only — one-off rows and materialized recurring instances.
+ * Excludes recurring _templates_ (`recurringFrequency IS NOT NULL`), which
+ * live in this same table as rule definitions, not actual spend events; see
+ * db/queries/recurring.ts and DATABASE_SCHEMA.md's recurring-expense design.
+ */
 export async function listExpenses(userId: string): Promise<Expense[]> {
   const rows = await db
     .select()
     .from(expenses)
-    .where(eq(expenses.userId, userId))
+    .where(and(eq(expenses.userId, userId), isNull(expenses.recurringFrequency)))
     .orderBy(desc(expenses.date));
   return rows.map(toExpense);
 }
@@ -114,7 +120,13 @@ export async function listExpensesByCategory(
   const rows = await db
     .select()
     .from(expenses)
-    .where(and(eq(expenses.userId, userId), eq(expenses.categoryId, categoryId)))
+    .where(
+      and(
+        eq(expenses.userId, userId),
+        eq(expenses.categoryId, categoryId),
+        isNull(expenses.recurringFrequency)
+      )
+    )
     .orderBy(desc(expenses.date));
   return rows.map(toExpense);
 }

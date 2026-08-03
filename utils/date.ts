@@ -1,3 +1,5 @@
+import type { RecurringFrequency } from '@/types';
+
 /** Returns the current month as YYYY-MM, matching the `budgets.month` column format. */
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
@@ -70,6 +72,25 @@ export function formatMonthLabel(month: string): string {
     month: 'long',
     year: 'numeric',
   });
+}
+
+/** Advances a YYYY-MM-DD date by one recurrence of the given frequency. */
+export function nextOccurrenceDate(date: string, frequency: RecurringFrequency): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const next = new Date(year, month - 1, day);
+
+  if (frequency === 'daily') {
+    next.setDate(next.getDate() + 1);
+  } else if (frequency === 'weekly') {
+    next.setDate(next.getDate() + 7);
+  } else {
+    next.setMonth(next.getMonth() + 1);
+  }
+
+  const y = next.getFullYear();
+  const m = String(next.getMonth() + 1).padStart(2, '0');
+  const d = String(next.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 /** True if `value` is a real calendar date in YYYY-MM-DD form (rejects e.g. 2026-02-30). */

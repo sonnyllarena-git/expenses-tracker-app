@@ -7,6 +7,7 @@ import migrations from './migrations/migrations';
 import { Text, View } from '@/components/Themed';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
+import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 
 function StatusScreen({ title, message }: { title?: string; message?: string }) {
@@ -60,8 +61,9 @@ function MigrationGate({ children }: PropsWithChildren) {
 
 /**
  * Loads the single local account, then its categories (seeding the 7 defaults
- * on first launch), then its expenses — in that order, since categories and
- * expenses both need the account's id. Runs once migrations have succeeded.
+ * on first launch), materializes any due recurring expenses, then loads
+ * expenses (picking up both prior and newly-materialized rows in one load),
+ * then the recurring templates themselves. Runs once migrations have succeeded.
  */
 function BootstrapGate({ children }: PropsWithChildren) {
   const [ready, setReady] = useState(false);
@@ -72,7 +74,9 @@ function BootstrapGate({ children }: PropsWithChildren) {
       try {
         const account = await useSettingsStore.getState().init();
         await useCategoryStore.getState().load(account.id);
+        await useRecurringStore.getState().materialize(account.id);
         await useExpenseStore.getState().load(account.id);
+        await useRecurringStore.getState().load(account.id);
         setReady(true);
       } catch (err) {
         setBootstrapError(err instanceof Error ? err : new Error(String(err)));

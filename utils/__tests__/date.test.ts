@@ -1,4 +1,10 @@
-import { daysInMonth, formatMonthLabel, greetingForNow, shiftMonth } from '../date';
+import {
+  daysInMonth,
+  formatMonthLabel,
+  greetingForNow,
+  nextOccurrenceDate,
+  shiftMonth,
+} from '../date';
 
 describe('greetingForNow', () => {
   it('returns a morning greeting between 6am and noon', () => {
@@ -81,5 +87,27 @@ describe('formatMonthLabel', () => {
 
   it('formats January correctly', () => {
     expect(formatMonthLabel('2026-01')).toBe('January 2026');
+  });
+});
+
+describe('nextOccurrenceDate', () => {
+  it('advances one day for daily', () => {
+    expect(nextOccurrenceDate('2026-08-03', 'daily')).toBe('2026-08-04');
+  });
+
+  it('advances seven days for weekly', () => {
+    expect(nextOccurrenceDate('2026-08-03', 'weekly')).toBe('2026-08-10');
+  });
+
+  it('advances one calendar month for monthly', () => {
+    expect(nextOccurrenceDate('2026-08-03', 'monthly')).toBe('2026-09-03');
+  });
+
+  it('rolls over to the next year', () => {
+    expect(nextOccurrenceDate('2026-12-25', 'weekly')).toBe('2027-01-01');
+  });
+
+  it('rolls monthly over year end', () => {
+    expect(nextOccurrenceDate('2026-12-15', 'monthly')).toBe('2027-01-15');
   });
 });
