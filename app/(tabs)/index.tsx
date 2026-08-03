@@ -1,13 +1,17 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
+import { AvatarMood } from '@/components/AvatarMood';
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { moodFromUsage, overallBudgetUsage } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
-import { currentMonth } from '@/utils/date';
+import { currentMonth, greetingForNow } from '@/utils/date';
 
 export default function DashboardScreen() {
   // Account, categories, and expenses are all guaranteed loaded before this
@@ -15,16 +19,34 @@ export default function DashboardScreen() {
   const { account } = useSettingsStore();
   const { categories } = useCategoryStore();
   const { expenses } = useExpenseStore();
+  const budgets = useBudgetStore((state) => state.budgets);
+  const loadBudgets = useBudgetStore((state) => state.load);
   const colorScheme = useColorScheme();
 
-  const monthTotal = expenses
-    .filter((expense) => expense.date.startsWith(currentMonth()))
-    .reduce((sum, expense) => sum + expense.amount, 0);
+  // Picked once per screen mount, not on every render, so it doesn't reroll
+  // between the morning/afternoon/evening variants on each re-render.
+  const [greeting] = useState(() => greetingForNow());
+
+  useEffect(() => {
+    if (account) {
+      loadBudgets(account.id);
+    }
+  }, [account, loadBudgets]);
+
+  const month = currentMonth();
+  const monthExpenses = expenses.filter((expense) => expense.date.startsWith(month));
+  const monthTotal = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const allTimeTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const usage = overallBudgetUsage(budgets, expenses, month);
+  const mood = moodFromUsage(usage);
+  const currency = account?.currency ?? 'PHP';
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Dashboard</Text>
-      <Text style={styles.subtitle}>Monthly summary, charts, and recent expenses land here.</Text>
+
+      <AvatarMood mood={mood} />
+      <Text style={styles.greeting}>{greeting}</Text>
 
       <View style={[styles.statusCard, { backgroundColor: Colors[colorScheme].card }]}>
         {account && (
@@ -37,10 +59,16 @@ export default function DashboardScreen() {
         )}
         <Text style={styles.statusLabel}>Categories</Text>
         <Text style={styles.statusValue}>{categories.length}</Text>
-        <Text style={styles.statusLabel}>This month so far</Text>
-        <Text style={styles.statusValue}>
-          {formatCurrency(monthTotal, account?.currency ?? 'PHP')}
-        </Text>
+        <Text style={styles.statusLabel}>Total this month</Text>
+        <Text style={styles.statusValue}>{formatCurrency(monthTotal, currency)}</Text>
+        <Text style={styles.statusLabel}>Total spent (all time)</Text>
+        <Text style={styles.statusValue}>{formatCurrency(allTimeTotal, currency)}</Text>
+        {usage !== null && (
+          <>
+            <Text style={styles.statusLabel}>Budget used this month</Text>
+            <Text style={styles.statusValue}>{Math.round(usage * 100)}%</Text>
+          </>
+        )}
       </View>
     </View>
   );
@@ -58,9 +86,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-  subtitle: {
-    textAlign: 'center',
-    opacity: 0.7,
+  greeting: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   statusCard: {
     width: '100%',

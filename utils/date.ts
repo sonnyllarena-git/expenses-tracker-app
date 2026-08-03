@@ -21,6 +21,35 @@ export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+const MORNING_GREETINGS = ['Good morning! ☀️', 'Rise and shine! ☕'];
+const AFTERNOON_GREETINGS = ['Good afternoon! 🌤️', 'Happy coffee afternoon! ☕'];
+const EVENING_GREETINGS = ['Good evening! 🌙', 'Settle in! 🛋️'];
+
+/**
+ * Time-of-day greeting, picked randomly from that period's variants.
+ * Seasonal greetings (Christmas, New Year) take priority when they apply.
+ */
+export function greetingForNow(now: Date = new Date()): string {
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+
+  if (month === 12 && day >= 24 && day <= 26) {
+    return 'Merry Christmas! 🎄';
+  }
+  if (month === 1 && day === 1) {
+    return 'Happy New Year! 🎉';
+  }
+
+  const hour = now.getHours();
+  const pool =
+    hour >= 6 && hour < 12
+      ? MORNING_GREETINGS
+      : hour >= 12 && hour < 18
+        ? AFTERNOON_GREETINGS
+        : EVENING_GREETINGS;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 /** Number of days in a YYYY-MM month, e.g. '2026-02' -> 28. */
 export function daysInMonth(month: string): number {
   const [year, monthNum] = month.split('-').map(Number);
