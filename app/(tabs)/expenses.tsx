@@ -1,18 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { Alert, FlatList, Image, Pressable, StyleSheet } from 'react-native';
 
 import { ChipPicker } from '@/components/ChipPicker';
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import type { Expense } from '@/types';
+import { hasOverThresholdBudget } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
-import { formatDate } from '@/utils/date';
+import { currentMonth, formatDate } from '@/utils/date';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -24,6 +26,8 @@ export default function ExpenseListScreen() {
   const loadExpenses = useExpenseStore((state) => state.load);
   const removeExpense = useExpenseStore((state) => state.removeExpense);
   const categories = useCategoryStore((state) => state.categories);
+  const budgets = useBudgetStore((state) => state.budgets);
+  const loadBudgets = useBudgetStore((state) => state.load);
   const colorScheme = useColorScheme();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -36,6 +40,16 @@ export default function ExpenseListScreen() {
       return () => setSelectedCategoryId(ALL_CATEGORIES);
     }, [])
   );
+
+  useEffect(() => {
+    if (account) {
+      loadBudgets(account.id);
+    }
+  }, [account, loadBudgets]);
+
+  const showBudgetWarning =
+    (account?.budgetAlertsEnabled ?? true) &&
+    hasOverThresholdBudget(budgets, expenses, currentMonth());
 
   const onRefresh = useCallback(async () => {
     if (!account) {
@@ -81,6 +95,17 @@ export default function ExpenseListScreen() {
 
   return (
     <View style={styles.container}>
+      {showBudgetWarning && (
+        <View
+          style={[styles.warningBanner, { backgroundColor: `${Colors[colorScheme].warning}22` }]}
+        >
+          <Ionicons name="warning-outline" size={18} color={Colors[colorScheme].warning} />
+          <Text style={[styles.warningText, { color: Colors[colorScheme].warning }]}>
+            One or more budgets are near or over their limit this month.
+          </Text>
+        </View>
+      )}
+
       <View style={styles.filterBar}>
         <ChipPicker
           options={[
@@ -160,6 +185,20 @@ export default function ExpenseListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
   },
   filterBar: {
     paddingHorizontal: 16,
