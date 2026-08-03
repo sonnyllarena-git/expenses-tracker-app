@@ -68,6 +68,38 @@ export function groupExpensesByDay(expenses: Expense[], month: string): DailySpe
   return points;
 }
 
+export interface WeeklySpendPoint {
+  label: string;
+  value: number;
+}
+
+/** Sums the given month's expenses into consecutive 7-day chunks starting on day 1. */
+export function groupExpensesByWeek(expenses: Expense[], month: string): WeeklySpendPoint[] {
+  const [year, monthNum] = month.split('-').map(Number);
+  const lastDay = daysInMonth(month);
+  const points: WeeklySpendPoint[] = [];
+
+  for (let start = 1; start <= lastDay; start += 7) {
+    const end = Math.min(start + 6, lastDay);
+    const value = expenses
+      .filter((e) => {
+        if (!e.date.startsWith(month)) {
+          return false;
+        }
+        const day = Number(e.date.slice(8, 10));
+        return day >= start && day <= end;
+      })
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const monthAbbrev = new Date(year, monthNum - 1, start).toLocaleDateString('en-US', {
+      month: 'short',
+    });
+    points.push({ label: `${monthAbbrev} ${start}-${end}`, value });
+  }
+
+  return points;
+}
+
 export interface BudgetVsActualRow {
   budget: Budget;
   categoryName: string;

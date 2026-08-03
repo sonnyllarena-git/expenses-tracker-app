@@ -56,6 +56,22 @@ export function daysInMonth(month: string): number {
   return new Date(year, monthNum, 0).getDate();
 }
 
+/** Moves a YYYY-MM month forward/backward by `delta` months, e.g. ('2026-01', -1) -> '2025-12'. */
+export function shiftMonth(month: string, delta: number): string {
+  const [year, monthNum] = month.split('-').map(Number);
+  const shifted = new Date(year, monthNum - 1 + delta, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Formats a YYYY-MM month for display, e.g. '2026-08' -> 'August 2026'. */
+export function formatMonthLabel(month: string): string {
+  const [year, monthNum] = month.split('-').map(Number);
+  return new Date(year, monthNum - 1, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 /** True if `value` is a real calendar date in YYYY-MM-DD form (rejects e.g. 2026-02-30). */
 export function isValidDateString(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);

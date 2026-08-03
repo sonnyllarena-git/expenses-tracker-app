@@ -1,4 +1,9 @@
-import { budgetVsActual, groupExpensesByCategory, groupExpensesByDay } from '../reports';
+import {
+  budgetVsActual,
+  groupExpensesByCategory,
+  groupExpensesByDay,
+  groupExpensesByWeek,
+} from '../reports';
 import type { Budget, Category, Expense } from '@/types';
 
 function makeExpense(overrides: Partial<Expense>): Expense {
@@ -105,6 +110,31 @@ describe('groupExpensesByDay', () => {
     const points = groupExpensesByDay([], '2026-01');
     const labeled = points.filter((p) => p.label !== '').map((p) => p.day);
     expect(labeled).toEqual([1, 5, 10, 15, 20, 25, 30]);
+  });
+});
+
+describe('groupExpensesByWeek', () => {
+  it('chunks the month into consecutive 7-day buckets with correct labels', () => {
+    const points = groupExpensesByWeek([], '2026-08');
+    expect(points.map((p) => p.label)).toEqual([
+      'Aug 1-7',
+      'Aug 8-14',
+      'Aug 15-21',
+      'Aug 22-28',
+      'Aug 29-31',
+    ]);
+  });
+
+  it('sums expenses within each week bucket', () => {
+    const expenses = [
+      makeExpense({ date: '2026-08-01', amount: 100 }),
+      makeExpense({ date: '2026-08-07', amount: 50 }),
+      makeExpense({ date: '2026-08-08', amount: 20 }),
+      makeExpense({ date: '2026-07-31', amount: 999 }),
+    ];
+    const points = groupExpensesByWeek(expenses, '2026-08');
+    expect(points[0]).toEqual({ label: 'Aug 1-7', value: 150 });
+    expect(points[1]).toEqual({ label: 'Aug 8-14', value: 20 });
   });
 });
 

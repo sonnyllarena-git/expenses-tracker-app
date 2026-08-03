@@ -1,4 +1,4 @@
-import { daysInMonth, greetingForNow } from '../date';
+import { daysInMonth, formatMonthLabel, greetingForNow, shiftMonth } from '../date';
 
 describe('greetingForNow', () => {
   it('returns a morning greeting between 6am and noon', () => {
@@ -49,5 +49,37 @@ describe('daysInMonth', () => {
 
   it('returns 31 for a 31-day month', () => {
     expect(daysInMonth('2026-01')).toBe(31);
+  });
+});
+
+describe('shiftMonth', () => {
+  it('moves forward within a year', () => {
+    expect(shiftMonth('2026-08', 1)).toBe('2026-09');
+  });
+
+  it('moves backward within a year', () => {
+    expect(shiftMonth('2026-08', -1)).toBe('2026-07');
+  });
+
+  it('rolls over to the next year', () => {
+    expect(shiftMonth('2026-12', 1)).toBe('2027-01');
+  });
+
+  it('rolls back to the previous year', () => {
+    expect(shiftMonth('2026-01', -1)).toBe('2025-12');
+  });
+
+  it('supports multi-month jumps', () => {
+    expect(shiftMonth('2026-01', 13)).toBe('2027-02');
+  });
+});
+
+describe('formatMonthLabel', () => {
+  it('formats a YYYY-MM month as a full month name and year', () => {
+    expect(formatMonthLabel('2026-08')).toBe('August 2026');
+  });
+
+  it('formats January correctly', () => {
+    expect(formatMonthLabel('2026-01')).toBe('January 2026');
   });
 });

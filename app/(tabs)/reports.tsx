@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
 import { isAvailableAsync, shareAsync } from 'expo-sharing';
-import { PieChart, LineChart } from 'react-native-gifted-charts';
 import { useEffect, useState, type ComponentProps } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
 
 import { ChipPicker, type ChipOption } from '@/components/ChipPicker';
+import { MonthPicker } from '@/components/MonthPicker';
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -17,9 +18,21 @@ import type { Budget } from '@/types';
 import { expensesToCsv } from '@/utils/csvExport';
 import { formatCurrency } from '@/utils/currency';
 import { currentMonth, today } from '@/utils/date';
-import { budgetVsActual, groupExpensesByCategory, groupExpensesByDay } from '@/utils/reports';
+import {
+  budgetVsActual,
+  groupExpensesByCategory,
+  groupExpensesByDay,
+  groupExpensesByWeek,
+} from '@/utils/reports';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
+type ReportView = 'daily' | 'weekly' | 'monthly';
+
+const REPORT_VIEW_OPTIONS: ChipOption<ReportView>[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
 
 interface BudgetFormState {
   editingId: string | null;
@@ -53,6 +66,8 @@ export default function ReportsScreen() {
   const removeBudget = useBudgetStore((state) => state.removeBudget);
   const colorScheme = useColorScheme();
 
+  const [selectedMonth, setSelectedMonth] = useState(() => currentMonth());
+  const [reportView, setReportView] = useState<ReportView>('monthly');
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(initialBudgetForm);
   const [savingBudget, setSavingBudget] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -63,7 +78,7 @@ export default function ReportsScreen() {
     }
   }, [account, loadBudgets]);
 
-  const month = currentMonth();
+  const month = selectedMonth;
   const currency = account?.currency ?? 'PHP';
 
   const categorySlices = groupExpensesByCategory(expenses, categories, month);
@@ -71,7 +86,18 @@ export default function ReportsScreen() {
   const pieData = categorySlices.map((slice) => ({ value: slice.value, color: slice.color }));
 
   const dailyPoints = groupExpensesByDay(expenses, month);
+  const weeklyPoints = groupExpensesByWeek(expenses, month);
   const lineData = dailyPoints.map((point) => ({ value: point.value, label: point.label }));
+  const dailyBarData = dailyPoints.map((point) => ({
+    value: point.value,
+    label: point.label,
+    frontColor: Colors[colorScheme].accent,
+  }));
+  const weeklyBarData = weeklyPoints.map((point) => ({
+    value: point.value,
+    label: point.label,
+    frontColor: Colors[colorScheme].accent,
+  }));
   const hasTrendData = dailyPoints.some((point) => point.value > 0);
 
   const budgetRows = budgetVsActual(budgets, expenses, categories, month);
@@ -175,6 +201,8 @@ export default function ReportsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Reports</Text>
 
+      <MonthPicker month={selectedMonth} onChange={setSelectedMonth} />
+
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
         <Text style={styles.sectionTitle}>Spending by Category</Text>
         {categorySlices.length > 0 ? (
@@ -208,18 +236,51 @@ export default function ReportsScreen() {
 
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
         <Text style={styles.sectionTitle}>Spending Trend</Text>
+        <ChipPicker
+          options={REPORT_VIEW_OPTIONS}
+          selectedValue={reportView}
+          onSelect={setReportView}
+        />
         {hasTrendData ? (
-          <LineChart
-            data={lineData}
-            thickness={2}
-            color={Colors[colorScheme].accent}
-            hideDataPoints
-            noOfSections={4}
-            height={180}
-            isAnimated
-            xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 10 }}
-            yAxisTextStyle={{ color: Colors[colorScheme].text }}
-          />
+          <View style={styles.chartRow}>
+            {reportView === 'monthly' && (
+              <LineChart
+                data={lineData}
+                thickness={2}
+                color={Colors[colorScheme].accent}
+                hideDataPoints
+                noOfSections={4}
+                height={180}
+                isAnimated
+                xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 10 }}
+                yAxisTextStyle={{ color: Colors[colorScheme].text }}
+              />
+            )}
+            {reportView === 'daily' && (
+              <BarChart
+                data={dailyBarData}
+                barWidth={dailyBarData.length > 20 ? 6 : 10}
+                spacing={dailyBarData.length > 20 ? 4 : 8}
+                noOfSections={4}
+                height={180}
+                isAnimated
+                xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
+                yAxisTextStyle={{ color: Colors[colorScheme].text }}
+              />
+            )}
+            {reportView === 'weekly' && (
+              <BarChart
+                data={weeklyBarData}
+                barWidth={40}
+                spacing={20}
+                noOfSections={4}
+                height={180}
+                isAnimated
+                xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
+                yAxisTextStyle={{ color: Colors[colorScheme].text }}
+              />
+            )}
+          </View>
         ) : (
           <Text style={styles.emptyText}>No expenses this month yet.</Text>
         )}
@@ -397,6 +458,9 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 13,
+  },
+  chartRow: {
+    marginTop: 8,
   },
   budgetRow: {
     gap: 6,
