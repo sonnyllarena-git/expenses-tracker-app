@@ -1,41 +1,156 @@
-import { StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
 
+import { ChipPicker } from '@/components/ChipPicker';
+import { SettingsToggleRow } from '@/components/SettingsToggleRow';
 import { Text, View } from '@/components/Themed';
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
+import { SUPPORTED_CURRENCIES } from '@/constants/currencies';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import type { AccountType } from '@/types';
+
+const ACCOUNT_TYPES: AccountType[] = ['personal', 'family', 'business'];
 
 export default function SettingsScreen() {
   const account = useSettingsStore((state) => state.account);
+  const updateAccount = useSettingsStore((state) => state.updateAccount);
+  const resetAllData = useSettingsStore((state) => state.resetAllData);
+  const colorScheme = useColorScheme();
+  const [resetting, setResetting] = useState(false);
+
+  function handleUpdateError(err: unknown) {
+    Alert.alert('Failed to save', err instanceof Error ? err.message : 'Unknown error');
+  }
+
+  function handleDeleteAll() {
+    Alert.alert(
+      'Delete all data?',
+      'This permanently deletes all expenses and budgets on this device. Categories will be reset to defaults. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setResetting(true);
+            try {
+              await resetAllData();
+              Alert.alert('All data deleted.');
+            } catch (err) {
+              Alert.alert(
+                'Failed to delete data',
+                err instanceof Error ? err.message : 'Unknown error'
+              );
+            } finally {
+              setResetting(false);
+            }
+          },
+        },
+      ]
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Settings</Text>
-      <Text style={styles.subtitle}>
-        Account type, currency, sharing, notifications, and data export/delete — coming in Weeks
-        5-11.
-      </Text>
-      {account && (
-        <Text style={styles.subtitle}>
-          Current account: {account.accountType} ({account.currency})
-        </Text>
-      )}
-    </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionLabel}>Currency</Text>
+        <ChipPicker
+          options={SUPPORTED_CURRENCIES.map((c) => ({ value: c.code, label: c.label }))}
+          selectedValue={account?.currency ?? null}
+          onSelect={(code) => updateAccount({ currency: code }).catch(handleUpdateError)}
+        />
+
+        <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Account Type</Text>
+        <ChipPicker
+          options={ACCOUNT_TYPES.map((type) => ({
+            value: type,
+            label: type.charAt(0).toUpperCase() + type.slice(1),
+          }))}
+          selectedValue={account?.accountType ?? null}
+          onSelect={(type) => updateAccount({ accountType: type }).catch(handleUpdateError)}
+        />
+      </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <SettingsToggleRow
+          label="Family Sharing"
+          caption="Family member management is coming in a future update."
+          value={account?.sharingEnabled ?? false}
+          onValueChange={(v) => updateAccount({ sharingEnabled: v }).catch(handleUpdateError)}
+        />
+        <SettingsToggleRow
+          label="Notifications"
+          caption="Enables alerts once notification scheduling ships; no permissions are requested yet."
+          value={account?.notificationsEnabled ?? true}
+          onValueChange={(v) => updateAccount({ notificationsEnabled: v }).catch(handleUpdateError)}
+        />
+        <SettingsToggleRow
+          label="Budget Alerts"
+          caption="Alerts you when a category nears or exceeds its monthly budget."
+          value={account?.budgetAlertsEnabled ?? true}
+          onValueChange={(v) => updateAccount({ budgetAlertsEnabled: v }).catch(handleUpdateError)}
+        />
+      </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionLabel}>Data</Text>
+        <Pressable
+          onPress={handleDeleteAll}
+          disabled={resetting}
+          style={[
+            styles.dangerButton,
+            { borderColor: Colors[colorScheme].warning },
+            resetting && styles.disabled,
+          ]}
+        >
+          <Text style={[styles.dangerButtonText, { color: Colors[colorScheme].warning }]}>
+            {resetting ? 'Deleting…' : 'Delete All Data'}
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  content: {
     padding: 24,
-    gap: 12,
+    gap: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
   },
-  subtitle: {
-    textAlign: 'center',
+  card: {
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  sectionLabel: {
+    fontSize: 13,
     opacity: 0.7,
+  },
+  sectionLabelSpaced: {
+    marginTop: 12,
+  },
+  dangerButton: {
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  dangerButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  disabled: {
+    opacity: 0.6,
   },
 });

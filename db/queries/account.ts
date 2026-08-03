@@ -1,3 +1,5 @@
+import { eq } from 'drizzle-orm';
+
 import { db } from '../client';
 import { users } from '../schema';
 import { generateId } from '@/utils/uuid';
@@ -38,4 +40,31 @@ export async function getOrCreateLocalAccount(): Promise<UserAccount> {
     .returning();
 
   return toUserAccount(created);
+}
+
+export interface UpdateAccountInput {
+  accountType?: AccountType;
+  currency?: string;
+  sharingEnabled?: boolean;
+  notificationsEnabled?: boolean;
+  budgetAlertsEnabled?: boolean;
+}
+
+export async function updateAccount(id: string, input: UpdateAccountInput): Promise<UserAccount> {
+  const values: Partial<typeof users.$inferInsert> = {};
+  if (input.accountType !== undefined) values.accountType = input.accountType;
+  if (input.currency !== undefined) values.currency = input.currency;
+  if (input.sharingEnabled !== undefined) values.sharingEnabled = input.sharingEnabled;
+  if (input.notificationsEnabled !== undefined)
+    values.notificationsEnabled = input.notificationsEnabled;
+  if (input.budgetAlertsEnabled !== undefined)
+    values.budgetAlertsEnabled = input.budgetAlertsEnabled;
+
+  const [updated] = await db.update(users).set(values).where(eq(users.id, id)).returning();
+
+  if (!updated) {
+    throw new Error(`No account found with id ${id}`);
+  }
+
+  return toUserAccount(updated);
 }

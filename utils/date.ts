@@ -21,6 +21,12 @@ export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Number of days in a YYYY-MM month, e.g. '2026-02' -> 28. */
+export function daysInMonth(month: string): number {
+  const [year, monthNum] = month.split('-').map(Number);
+  return new Date(year, monthNum, 0).getDate();
+}
+
 /** True if `value` is a real calendar date in YYYY-MM-DD form (rejects e.g. 2026-02-30). */
 export function isValidDateString(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
