@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
-import { Alert, FlatList, Image, Pressable, StyleSheet } from 'react-native';
+import { Alert, FlatList, Image, Pressable, StyleSheet, TextInput } from 'react-native';
 
 import { ChipPicker } from '@/components/ChipPicker';
 import { Text, View } from '@/components/Themed';
@@ -14,7 +14,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import type { Expense } from '@/types';
 import { hasOverThresholdBudget } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
-import { currentMonth, formatDate } from '@/utils/date';
+import { currentMonth, formatDate, isValidDateString } from '@/utils/date';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -32,12 +32,20 @@ export default function ExpenseListScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  // Filter is transient screen state, not a saved preference — reset it
+  // Filters are transient screen state, not a saved preference — reset them
   // whenever the user navigates away so the tab always starts unfiltered.
   useFocusEffect(
     useCallback(() => {
-      return () => setSelectedCategoryId(ALL_CATEGORIES);
+      return () => {
+        setSelectedCategoryId(ALL_CATEGORIES);
+        setSearchQuery('');
+        setDateFrom('');
+        setDateTo('');
+      };
     }, [])
   );
 
@@ -88,10 +96,27 @@ export default function ExpenseListScreen() {
     router.push({ pathname: '/edit-expense/[id]', params: { id } });
   }
 
-  const filteredExpenses =
-    selectedCategoryId === ALL_CATEGORIES
-      ? expenses
-      : expenses.filter((e) => e.categoryId === selectedCategoryId);
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+  const validDateFrom = isValidDateString(dateFrom) ? dateFrom : null;
+  const validDateTo = isValidDateString(dateTo) ? dateTo : null;
+  const hasActiveFilter =
+    selectedCategoryId !== ALL_CATEGORIES || !!trimmedQuery || !!validDateFrom || !!validDateTo;
+
+  const filteredExpenses = expenses.filter((e) => {
+    if (selectedCategoryId !== ALL_CATEGORIES && e.categoryId !== selectedCategoryId) {
+      return false;
+    }
+    if (trimmedQuery && !e.description.toLowerCase().includes(trimmedQuery)) {
+      return false;
+    }
+    if (validDateFrom && e.date < validDateFrom) {
+      return false;
+    }
+    if (validDateTo && e.date > validDateTo) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <View style={styles.container}>
@@ -107,6 +132,44 @@ export default function ExpenseListScreen() {
       )}
 
       <View style={styles.filterBar}>
+        <TextInput
+          style={[
+            styles.searchInput,
+            { color: Colors[colorScheme].text, borderColor: Colors[colorScheme].border },
+          ]}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search description..."
+          placeholderTextColor={Colors[colorScheme].tabIconDefault}
+        />
+
+        <View style={styles.dateRangeRow}>
+          <TextInput
+            style={[
+              styles.dateInput,
+              { color: Colors[colorScheme].text, borderColor: Colors[colorScheme].border },
+            ]}
+            value={dateFrom}
+            onChangeText={setDateFrom}
+            placeholder="From YYYY-MM-DD"
+            placeholderTextColor={Colors[colorScheme].tabIconDefault}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            style={[
+              styles.dateInput,
+              { color: Colors[colorScheme].text, borderColor: Colors[colorScheme].border },
+            ]}
+            value={dateTo}
+            onChangeText={setDateTo}
+            placeholder="To YYYY-MM-DD"
+            placeholderTextColor={Colors[colorScheme].tabIconDefault}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+
         <ChipPicker
           options={[
             { value: ALL_CATEGORIES, label: 'All' },
@@ -125,6 +188,7 @@ export default function ExpenseListScreen() {
       <FlatList
         data={filteredExpenses}
         keyExtractor={(item) => item.id}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={
           filteredExpenses.length === 0 ? styles.emptyContent : styles.listContent
         }
@@ -135,9 +199,9 @@ export default function ExpenseListScreen() {
         )}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            {selectedCategoryId === ALL_CATEGORIES
-              ? 'No expenses yet. Add one from the Add tab, then pull down here to refresh.'
-              : 'No expenses in this category.'}
+            {hasActiveFilter
+              ? 'No expenses match these filters.'
+              : 'No expenses yet. Add one from the Add tab, then pull down here to refresh.'}
           </Text>
         }
         renderItem={({ item }) => {
@@ -204,6 +268,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 4,
+    gap: 8,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
+  dateRangeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dateInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
   },
   listContent: {
     padding: 16,
