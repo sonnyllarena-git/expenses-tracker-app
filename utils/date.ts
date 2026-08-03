@@ -3,9 +3,13 @@ export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-/** Formats an ISO8601 date string for display, e.g. "Jul 30, 2026". */
+/** Formats a YYYY-MM-DD date string for display, e.g. "Jul 30, 2026". */
 export function formatDate(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString('en-US', {
+  // Parsed as local year/month/day, not new Date(isoDate) — that reads a
+  // date-only string as UTC midnight, which renders as the previous day in
+  // any timezone behind UTC (e.g. "2026-08-03" showing as "Aug 2").
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

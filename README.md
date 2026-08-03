@@ -2,12 +2,16 @@
 
 Offline-first expense tracker for personal, family, and business use. React Native + Expo, TypeScript strict, local SQLite storage — no backend, no network calls in Phase 1.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design and ADRs, [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) for the data model, [SECURITY.md](./SECURITY.md) for the security checklist, [DEPLOYMENT.md](./DEPLOYMENT.md) for the build/release strategy, and [ROADMAP.md](./ROADMAP.md) for the 12-week phased plan. Current status: **Week 1 scaffold** — the app boots, runs its local database migration, and shows a 5-tab shell; feature logic (real Add/Edit/Reports/Sharing) starts in Week 2.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design and ADRs, [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) for the data model, [SECURITY.md](./SECURITY.md) for the security checklist, [DEPLOYMENT.md](./DEPLOYMENT.md) for the build/release strategy, and [ROADMAP.md](./ROADMAP.md) for the 12-week phased plan. Current status: **Week 2** — Expense CRUD (add/list/delete), category seeding, and startup bootstrap are wired to the SQLite data layer and verified on-device.
+
+**Project location:** this repo lives at `C:\dev\expense-tracker-app`, not under `Documents\Projects\...` — moved there because the Android native build (CMake/ninja, for `react-native-screens`/`react-native-worklets`) hits Windows' 260-character `MAX_PATH` limit under the longer, deeply-nested Documents path. See ARCHITECTURE.md ADR-009.
 
 ## Prerequisites
 
 - Node.js 24+ and npm (already verified on this machine)
-- The [Expo Go](https://expo.dev/go) app on your phone (easiest way to run this without an emulator)
+- **Eclipse Temurin JDK 17**, with `JAVA_HOME` set to it as a **user environment variable** — required for Android native builds. Android Studio's bundled JBR (JetBrains Runtime) is JDK 25 on this machine, which is unsupported by the Android Gradle Plugin's native (CMake) build step and causes `configureCMakeDebug` to fail; do not point `JAVA_HOME` at the Studio JBR for command-line builds.
+- Android SDK + a running AVD (`Pixel_6_Pro` emulator is set up) for local dev-client builds. `adb`/`emulator` live under `%LOCALAPPDATA%\Android\Sdk\platform-tools` and `...\Sdk\emulator` — not on PATH by default in a fresh shell.
+- The [Expo Go](https://expo.dev/go) app on your phone if you'd rather test on a physical device instead of the emulator (Expo Go works fine now — the earlier `libworklets.so` native crash was a build-environment issue, not an Expo Go incompatibility).
 - Windows-specific: no local iOS build/simulator is possible — iOS testing happens via Expo Go or EAS cloud builds only (see DEPLOYMENT.md)
 
 ## Setup
@@ -18,15 +22,25 @@ npm install
 
 ## Running the app
 
+**On the Android emulator/dev client (recommended for full native testing):**
+
+```bash
+npm run android
+```
+
+This prebuilds `android/` (gitignored, regenerated on demand), builds a debug APK, installs it on the running emulator, and launches it. First build takes several minutes; subsequent builds are much faster via Gradle's cache. Requires `JAVA_HOME` pointed at JDK 17 (see Prerequisites).
+
+**Via Expo Go on your phone (no build required):**
+
 ```bash
 npm start
 ```
 
-This prints a QR code in the terminal. Scan it with the Expo Go app on your phone (same Wi-Fi network as this machine) to load the app. There is no local Android/iOS emulator configured on this machine — if you set one up later, `npm run android` / `npm run ios` will target it directly.
+This prints a QR code in the terminal. Scan it with the Expo Go app on your phone (same Wi-Fi network as this machine) to load the app.
 
-On first launch, the app runs its SQLite migration and seeds the 7 default categories — the Dashboard tab shows "Local database: Ready" and a category count of 7 once that's done.
+On first launch, the app runs its SQLite migration, seeds the 7 default categories, and loads any existing expenses — the Dashboard tab shows "Categories: 7" once that bootstrap completes.
 
-**Don't use `npm run web` to preview the running app** — the database now opens on web, but Drizzle's query execution still fails there due to an upstream Drizzle/expo-sqlite-web gap (see ARCHITECTURE.md §6 for the full investigation). Expo Go on a physical device is the actual way to see the UI in Phase 1.
+**Don't use `npm run web` to preview the running app** — the database now opens on web, but Drizzle's query execution still fails there due to an upstream Drizzle/expo-sqlite-web gap (see ARCHITECTURE.md §6 for the full investigation). Use the emulator or Expo Go instead.
 
 ## Testing & quality checks
 
