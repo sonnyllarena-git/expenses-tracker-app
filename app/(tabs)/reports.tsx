@@ -91,12 +91,12 @@ export default function ReportsScreen() {
   const dailyBarData = dailyPoints.map((point) => ({
     value: point.value,
     label: point.label,
-    frontColor: Colors[colorScheme].accent,
+    frontColor: Colors[colorScheme].primary,
   }));
   const weeklyBarData = weeklyPoints.map((point) => ({
     value: point.value,
     label: point.label,
-    frontColor: Colors[colorScheme].accent,
+    frontColor: Colors[colorScheme].primary,
   }));
   const hasTrendData = dailyPoints.some((point) => point.value > 0);
 
@@ -247,7 +247,7 @@ export default function ReportsScreen() {
               <LineChart
                 data={lineData}
                 thickness={2}
-                color={Colors[colorScheme].accent}
+                color={Colors[colorScheme].primary}
                 hideDataPoints
                 noOfSections={4}
                 height={180}
@@ -293,8 +293,8 @@ export default function ReportsScreen() {
         )}
         {budgetRows.map((row) => {
           const barColor = row.isOverLimit
-            ? Colors[colorScheme].warning
-            : Colors[colorScheme].accent;
+            ? Colors[colorScheme].error
+            : Colors[colorScheme].success;
           const barWidth =
             `${Math.min(100, (row.actual / row.budget.limitAmount) * 100)}%` as const;
           return (
@@ -308,7 +308,7 @@ export default function ReportsScreen() {
                   <Ionicons name="create-outline" size={20} color={Colors[colorScheme].text} />
                 </Pressable>
                 <Pressable onPress={() => confirmDeleteBudget(row.budget)} hitSlop={8}>
-                  <Ionicons name="trash-outline" size={20} color={Colors[colorScheme].warning} />
+                  <Ionicons name="trash-outline" size={20} color={Colors[colorScheme].error} />
                 </Pressable>
               </View>
               <View style={[styles.barTrack, { backgroundColor: Colors[colorScheme].border }]}>
@@ -370,7 +370,7 @@ export default function ReportsScreen() {
             disabled={savingBudget}
             style={[
               styles.submitButton,
-              { backgroundColor: Colors[colorScheme].accent },
+              { backgroundColor: Colors[colorScheme].primary },
               savingBudget && styles.disabled,
             ]}
           >
@@ -391,7 +391,7 @@ export default function ReportsScreen() {
         disabled={exporting}
         style={[
           styles.submitButton,
-          { backgroundColor: Colors[colorScheme].accent },
+          { backgroundColor: Colors[colorScheme].primary },
           exporting && styles.disabled,
         ]}
       >

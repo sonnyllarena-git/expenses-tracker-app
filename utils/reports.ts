@@ -1,3 +1,4 @@
+import { theme } from '@/theme';
 import type { Budget, Category, Expense } from '@/types';
 import { daysInMonth } from '@/utils/date';
 
@@ -31,7 +32,7 @@ export function groupExpensesByCategory(
     slices.push({
       categoryId,
       name: category?.name ?? 'Uncategorized',
-      color: category?.color ?? '#999',
+      color: category?.color ?? theme.categoryFallback,
       value,
     });
   }
@@ -128,7 +129,7 @@ export function budgetVsActual(
       return {
         budget,
         categoryName: category?.name ?? 'Uncategorized',
-        categoryColor: category?.color ?? '#999',
+        categoryColor: category?.color ?? theme.categoryFallback,
         categoryIcon: category?.icon ?? 'help-circle',
         actual,
         remaining: budget.limitAmount - actual,

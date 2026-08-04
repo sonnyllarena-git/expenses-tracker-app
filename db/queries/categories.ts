@@ -23,10 +23,32 @@ export async function listCategories(userId: string): Promise<Category[]> {
   return rows.map(toCategory);
 }
 
+/**
+ * Brings already-seeded default categories' icon/color in line with the
+ * current DEFAULT_CATEGORIES definition (e.g. after a palette rebrand),
+ * without touching user-renamed/custom categories or re-seeding anything.
+ */
+async function syncDefaultCategoryStyles(existing: Category[]): Promise<void> {
+  for (const category of existing) {
+    if (category.isCustom) {
+      continue;
+    }
+    const def = DEFAULT_CATEGORIES.find((d) => d.name === category.name);
+    if (!def || (def.color === category.color && def.icon === category.icon)) {
+      continue;
+    }
+    await db
+      .update(categories)
+      .set({ color: def.color, icon: def.icon })
+      .where(eq(categories.id, category.id));
+  }
+}
+
 /** Seeds the 7 pre-defined categories for a user, skipping if any already exist. */
 export async function seedDefaultCategories(userId: string): Promise<number> {
   const existing = await listCategories(userId);
   if (existing.length > 0) {
+    await syncDefaultCategoryStyles(existing);
     return 0;
   }
 

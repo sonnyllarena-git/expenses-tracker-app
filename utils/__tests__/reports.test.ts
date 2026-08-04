@@ -4,6 +4,7 @@ import {
   groupExpensesByDay,
   groupExpensesByWeek,
 } from '../reports';
+import { theme } from '@/theme';
 import type { Budget, Category, Expense } from '@/types';
 
 function makeExpense(overrides: Partial<Expense>): Expense {
@@ -79,7 +80,7 @@ describe('groupExpensesByCategory', () => {
     const expenses = [makeExpense({ categoryId: 'missing-cat', amount: 42, date: '2026-08-01' })];
     const slices = groupExpensesByCategory(expenses, categories, '2026-08');
     expect(slices).toEqual([
-      { categoryId: 'missing-cat', name: 'Uncategorized', color: '#999', value: 42 },
+      { categoryId: 'missing-cat', name: 'Uncategorized', color: theme.categoryFallback, value: 42 },
     ]);
   });
 

@@ -195,7 +195,7 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
         <View style={styles.receiptRow}>
           <Image source={{ uri: receiptPhotoPath }} style={styles.receiptThumb} />
           <Pressable onPress={() => setReceiptPhotoPath(null)}>
-            <Text style={[styles.removeReceiptText, { color: Colors[colorScheme].warning }]}>
+            <Text style={[styles.removeReceiptText, { color: Colors[colorScheme].error }]}>
               Remove
             </Text>
           </Pressable>
@@ -218,7 +218,7 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
         disabled={saving}
         style={[
           styles.submitButton,
-          { backgroundColor: Colors[colorScheme].accent },
+          { backgroundColor: Colors[colorScheme].primary },
           saving && styles.submitButtonDisabled,
         ]}
       >

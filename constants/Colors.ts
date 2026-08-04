@@ -1,31 +1,38 @@
-const tintColorLight = '#2f95dc';
-const tintColorDark = '#fff';
+import { theme } from '../theme';
 
-// Accent = positive/savings/under-budget, warning = over-budget/alerts.
-const accent = '#2E7D32';
-const warning = '#C62828';
-
+// Sourced from theme.ts's brand tokens — change a value there, not here.
+// `tint`/`tabIconDefault`/`tabIconSelected`/`card` are kept as the existing
+// key names every screen already consumes; `primary`/`secondary`/`error`/
+// `warning`/`success`/`textSecondary` are the newer, more precise names.
 export default {
   light: {
-    text: '#000',
-    background: '#fff',
-    tint: tintColorLight,
-    tabIconDefault: '#ccc',
-    tabIconSelected: tintColorLight,
-    accent,
-    warning,
-    card: '#f5f5f5',
-    border: '#e0e0e0',
+    text: theme.light.text,
+    textSecondary: theme.light.textSecondary,
+    background: theme.light.background,
+    tint: theme.light.primary,
+    tabIconDefault: theme.light.muted,
+    tabIconSelected: theme.light.primary,
+    primary: theme.light.primary,
+    secondary: theme.light.secondary,
+    error: theme.light.error,
+    warning: theme.light.warning,
+    success: theme.light.success,
+    card: theme.light.surface,
+    border: theme.light.border,
   },
   dark: {
-    text: '#fff',
-    background: '#000',
-    tint: tintColorDark,
-    tabIconDefault: '#ccc',
-    tabIconSelected: tintColorDark,
-    accent,
-    warning,
-    card: '#1c1c1e',
-    border: '#2c2c2e',
+    text: theme.dark.text,
+    textSecondary: theme.dark.textSecondary,
+    background: theme.dark.background,
+    tint: theme.dark.primary,
+    tabIconDefault: theme.dark.muted,
+    tabIconSelected: theme.dark.primary,
+    primary: theme.dark.primary,
+    secondary: theme.dark.secondary,
+    error: theme.dark.error,
+    warning: theme.dark.warning,
+    success: theme.dark.success,
+    card: theme.dark.surface,
+    border: theme.dark.border,
   },
 };

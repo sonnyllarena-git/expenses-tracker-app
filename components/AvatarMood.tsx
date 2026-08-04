@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet } from 'react-native';
 
+import { theme } from '@/theme';
 import type { BudgetMood } from '@/utils/budget';
 
 const MOOD_EMOJI: Record<BudgetMood, string> = {
@@ -9,12 +10,12 @@ const MOOD_EMOJI: Record<BudgetMood, string> = {
   sad: '😟',
 };
 
-// Kept separate from constants/Colors.ts's accent/warning pair since the
-// neutral mood needs its own mid-point color that palette doesn't define.
+// Status colors are identical across light/dark (see theme.ts), so this
+// mapping is theme-invariant and doesn't need useColorScheme().
 const MOOD_COLOR: Record<BudgetMood, string> = {
-  happy: '#2E7D32',
-  neutral: '#F9A825',
-  sad: '#C62828',
+  happy: theme.light.success,
+  neutral: theme.light.warning,
+  sad: theme.light.error,
 };
 
 interface AvatarMoodProps {

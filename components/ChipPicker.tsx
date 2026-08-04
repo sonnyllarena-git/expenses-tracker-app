@@ -11,7 +11,7 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
 export interface ChipOption<T extends string> {
   value: T;
   label: string;
-  /** Border/fill color; falls back to the theme accent color. */
+  /** Border/fill color; falls back to the theme primary color. */
   color?: string;
   /** Omit for a text-only chip. */
   icon?: IoniconName;
@@ -35,7 +35,7 @@ export function ChipPicker<T extends string>({
     <View style={styles.row}>
       {options.map((option) => {
         const selected = option.value === selectedValue;
-        const color = option.color ?? Colors[colorScheme].accent;
+        const color = option.color ?? Colors[colorScheme].primary;
         return (
           <Pressable
             key={option.value}

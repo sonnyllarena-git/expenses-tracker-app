@@ -82,7 +82,7 @@ export function MonthPicker({ month, onChange }: MonthPickerProps) {
                     style={[
                       styles.monthCell,
                       { borderColor: Colors[colorScheme].border },
-                      isSelected && { backgroundColor: Colors[colorScheme].accent },
+                      isSelected && { backgroundColor: Colors[colorScheme].primary },
                     ]}
                   >
                     <Text style={[styles.monthCellText, isSelected && { color: '#fff' }]}>

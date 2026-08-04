@@ -154,7 +154,7 @@ export function RecurringForm({ initialTemplate, submitLabel, onSubmit }: Recurr
         disabled={saving}
         style={[
           styles.submitButton,
-          { backgroundColor: Colors[colorScheme].accent },
+          { backgroundColor: Colors[colorScheme].primary },
           saving && styles.disabled,
         ]}
       >

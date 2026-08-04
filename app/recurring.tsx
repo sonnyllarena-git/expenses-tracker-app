@@ -11,6 +11,7 @@ import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { theme } from '@/theme';
 import type { Expense } from '@/types';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
@@ -100,7 +101,9 @@ export default function RecurringScreen() {
           const status = recurringStatus(template, expenses);
           return (
             <View key={template.id} style={styles.row}>
-              <View style={[styles.iconCircle, { backgroundColor: category?.color ?? '#999' }]}>
+              <View
+                style={[styles.iconCircle, { backgroundColor: category?.color ?? theme.categoryFallback }]}
+              >
                 <Ionicons
                   name={(category?.icon as IoniconName) ?? 'help-circle'}
                   size={16}
@@ -132,7 +135,7 @@ export default function RecurringScreen() {
                 <Ionicons name="create-outline" size={20} color={Colors[colorScheme].text} />
               </Pressable>
               <Pressable onPress={() => confirmDelete(template)} hitSlop={8}>
-                <Ionicons name="trash-outline" size={20} color={Colors[colorScheme].warning} />
+                <Ionicons name="trash-outline" size={20} color={Colors[colorScheme].error} />
               </Pressable>
             </View>
           );
