@@ -15,6 +15,13 @@
       "when": 1785854763283,
       "tag": "0001_milky_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785854790587,
+      "tag": "0002_youthful_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

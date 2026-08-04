@@ -91,6 +91,25 @@ export const expenses = sqliteTable(
   ]
 );
 
+export const income = sqliteTable(
+  'income',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    amount: real('amount').notNull(),
+    source: text('source').notNull().default(''),
+    date: text('date').notNull(),
+    isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),
+    recurringFrequency: text('recurring_frequency'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index('idx_income_user_date').on(table.userId, table.date)]
+);
+
 export const familyMembers = sqliteTable('family_members', {
   id: text('id').primaryKey(),
   familyId: text('family_id').notNull(),

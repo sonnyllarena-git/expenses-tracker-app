@@ -54,6 +54,17 @@ export interface Budget {
   createdAt: string;
 }
 
+export interface Income {
+  id: string;
+  userId: string;
+  amount: number;
+  source: string;
+  date: string;
+  isRecurring: boolean;
+  recurringFrequency: RecurringFrequency | null;
+  createdAt: string;
+}
+
 export interface FamilyMember {
   id: string;
   familyId: string;
