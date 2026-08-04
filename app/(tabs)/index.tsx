@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useState, type ComponentProps } from 'react';
+import { ScrollView, StyleSheet } from 'react-native';
+import { BarChart } from 'react-native-gifted-charts';
 
 import { AvatarMood } from '@/components/AvatarMood';
 import { Text, View } from '@/components/Themed';
@@ -8,10 +10,21 @@ import Colors from '@/constants/Colors';
 import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
+import { useIncomeStore } from '@/store/useIncomeStore';
+import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { moodFromUsage, overallBudgetUsage } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
-import { currentMonth, greetingForNow } from '@/utils/date';
+import {
+  last7DaysSpend,
+  monthIncomeVsExpenses,
+  upcomingRecurringExpenses,
+} from '@/utils/dashboard';
+import { currentMonth, daysUntilPayday, formatDate, greetingForNow, today } from '@/utils/date';
+
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+const UPCOMING_WINDOW_DAYS = 30;
 
 export default function DashboardScreen() {
   // Account, categories, and expenses are all guaranteed loaded before this
@@ -19,6 +32,8 @@ export default function DashboardScreen() {
   const { account } = useSettingsStore();
   const { categories } = useCategoryStore();
   const { expenses } = useExpenseStore();
+  const { income } = useIncomeStore();
+  const templates = useRecurringStore((state) => state.templates);
   const budgets = useBudgetStore((state) => state.budgets);
   const loadBudgets = useBudgetStore((state) => state.load);
   const colorScheme = useColorScheme();
@@ -34,51 +49,125 @@ export default function DashboardScreen() {
   }, [account, loadBudgets]);
 
   const month = currentMonth();
-  const monthExpenses = expenses.filter((expense) => expense.date.startsWith(month));
-  const monthTotal = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const allTimeTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const usage = overallBudgetUsage(budgets, expenses, month);
   const mood = moodFromUsage(usage);
   const currency = account?.currency ?? 'PHP';
 
+  const barData = last7DaysSpend(expenses, today()).map((bar) => ({
+    value: bar.value,
+    label: bar.label,
+    frontColor: Colors[colorScheme].primary,
+  }));
+
+  const upcoming = upcomingRecurringExpenses(
+    templates,
+    expenses,
+    categories,
+    today(),
+    UPCOMING_WINDOW_DAYS
+  );
+
+  const { totalIncome, totalExpenses, net } = monthIncomeVsExpenses(income, expenses, month);
+  const paydayDays = account ? daysUntilPayday(account.payday) : null;
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Dashboard</Text>
 
-      <AvatarMood mood={mood} />
-      <Text style={styles.greeting}>{greeting}</Text>
+      <View style={styles.moodSection}>
+        <AvatarMood mood={mood} />
+        <Text style={styles.greeting}>{greeting}</Text>
+      </View>
 
-      <View style={[styles.statusCard, { backgroundColor: Colors[colorScheme].card }]}>
-        {account && (
-          <>
-            <Text style={styles.statusLabel}>Account</Text>
-            <Text style={styles.statusValue}>
-              {account.accountType} · {account.currency}
-            </Text>
-          </>
-        )}
-        <Text style={styles.statusLabel}>Categories</Text>
-        <Text style={styles.statusValue}>{categories.length}</Text>
-        <Text style={styles.statusLabel}>Total this month</Text>
-        <Text style={styles.statusValue}>{formatCurrency(monthTotal, currency)}</Text>
-        <Text style={styles.statusLabel}>Total spent (all time)</Text>
-        <Text style={styles.statusValue}>{formatCurrency(allTimeTotal, currency)}</Text>
-        {usage !== null && (
-          <>
-            <Text style={styles.statusLabel}>Budget used this month</Text>
-            <Text style={styles.statusValue}>{Math.round(usage * 100)}%</Text>
-          </>
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionTitle}>Last 7 Days</Text>
+        <View style={styles.chartRow}>
+          <BarChart
+            data={barData}
+            barWidth={22}
+            spacing={16}
+            noOfSections={4}
+            height={140}
+            isAnimated
+            xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 11 }}
+            yAxisTextStyle={{ color: Colors[colorScheme].text }}
+          />
+        </View>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionTitle}>Payday</Text>
+        {account && paydayDays !== null ? (
+          <Text style={styles.paydayText}>
+            {paydayDays === 0
+              ? 'Payday is today! 🎉'
+              : `${paydayDays} day${paydayDays === 1 ? '' : 's'} until payday (Day ${account.payday})`}
+          </Text>
+        ) : (
+          <Text style={styles.emptyText}>Loading…</Text>
         )}
       </View>
-    </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionTitle}>Upcoming</Text>
+        {upcoming.length === 0 ? (
+          <Text style={styles.emptyText}>No recurring expenses due in the next 30 days.</Text>
+        ) : (
+          upcoming.map((item) => (
+            <View key={item.templateId} style={styles.upcomingRow}>
+              <View style={[styles.iconCircle, { backgroundColor: item.categoryColor }]}>
+                <Ionicons name={item.categoryIcon as IoniconName} size={16} color="#fff" />
+              </View>
+              <View style={styles.upcomingMain}>
+                <Text style={styles.upcomingTitle}>{item.categoryName}</Text>
+                <Text style={styles.upcomingCaption}>
+                  {formatDate(item.dueDate)} ·{' '}
+                  {item.daysLeft === 0 ? 'Due today' : `${item.daysLeft} days left`}
+                </Text>
+              </View>
+              <Text style={styles.upcomingAmount}>{formatCurrency(item.amount, currency)}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionTitle}>This Month</Text>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Income</Text>
+          <Text style={[styles.summaryValue, { color: Colors[colorScheme].success }]}>
+            {formatCurrency(totalIncome, currency)}
+          </Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Expenses</Text>
+          <Text style={[styles.summaryValue, { color: Colors[colorScheme].error }]}>
+            {formatCurrency(totalExpenses, currency)}
+          </Text>
+        </View>
+        <View
+          style={[styles.summaryRow, styles.netRow, { borderTopColor: Colors[colorScheme].border }]}
+        >
+          <Text style={styles.summaryLabelBold}>Net</Text>
+          <Text
+            style={[
+              styles.summaryValueBold,
+              { color: net >= 0 ? Colors[colorScheme].success : Colors[colorScheme].error },
+            ]}
+          >
+            {formatCurrency(net, currency)}
+          </Text>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  content: {
     padding: 24,
     gap: 16,
   },
@@ -86,23 +175,87 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
+  moodSection: {
+    alignItems: 'center',
+    gap: 8,
+  },
   greeting: {
     fontSize: 16,
     fontWeight: '600',
   },
-  statusCard: {
-    width: '100%',
+  card: {
     borderRadius: 12,
     padding: 16,
-    gap: 4,
+    gap: 8,
   },
-  statusLabel: {
-    fontSize: 12,
-    opacity: 0.6,
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  emptyText: {
+    opacity: 0.7,
+  },
+  chartRow: {
+    alignItems: 'center',
     marginTop: 8,
   },
-  statusValue: {
+  paydayText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  upcomingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upcomingMain: {
+    flex: 1,
+  },
+  upcomingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  upcomingCaption: {
+    fontSize: 12,
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  upcomingAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  netRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 4,
+    paddingTop: 8,
+  },
+  summaryLabelBold: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  summaryValueBold: {
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

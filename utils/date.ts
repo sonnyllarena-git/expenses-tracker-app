@@ -93,6 +93,30 @@ export function nextOccurrenceDate(date: string, frequency: RecurringFrequency):
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Resolves a 1-31 payday setting to an actual date in the given year/month,
+ * clamping to that month's last day (e.g. payday 31 in a 30-day month -> the 30th).
+ */
+function paydayDateInMonth(year: number, monthIndex: number, payday: number): Date {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return new Date(year, monthIndex, Math.min(payday, lastDay));
+}
+
+/**
+ * Days remaining until the next occurrence of `payday` (1-31) on/after `now`,
+ * clamped to each month's actual length. Returns 0 if payday is today.
+ */
+export function daysUntilPayday(payday: number, now: Date = new Date()): number {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  let next = paydayDateInMonth(today.getFullYear(), today.getMonth(), payday);
+  if (next < today) {
+    next = paydayDateInMonth(today.getFullYear(), today.getMonth() + 1, payday);
+  }
+
+  return Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 /** True if `value` is a real calendar date in YYYY-MM-DD form (rejects e.g. 2026-02-30). */
 export function isValidDateString(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);

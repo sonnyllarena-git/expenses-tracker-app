@@ -1,5 +1,6 @@
 import {
   daysInMonth,
+  daysUntilPayday,
   formatMonthLabel,
   greetingForNow,
   nextOccurrenceDate,
@@ -55,6 +56,30 @@ describe('daysInMonth', () => {
 
   it('returns 31 for a 31-day month', () => {
     expect(daysInMonth('2026-01')).toBe(31);
+  });
+});
+
+describe('daysUntilPayday', () => {
+  it('returns 0 when today is payday', () => {
+    expect(daysUntilPayday(15, new Date(2026, 7, 15))).toBe(0);
+  });
+
+  it('counts forward within the current month', () => {
+    expect(daysUntilPayday(20, new Date(2026, 7, 15))).toBe(5);
+  });
+
+  it('rolls to next month once this month\'s payday has passed', () => {
+    // Aug 25 has already passed on Aug 30 -> next payday is Sep 25 (26 days later).
+    expect(daysUntilPayday(25, new Date(2026, 7, 30))).toBe(26);
+  });
+
+  it('clamps a payday of 31 to the last day of a 30-day month', () => {
+    // April has 30 days, so payday 31 resolves to Apr 30.
+    expect(daysUntilPayday(31, new Date(2026, 3, 25))).toBe(5);
+  });
+
+  it('clamps to February\'s last day in a non-leap year', () => {
+    expect(daysUntilPayday(31, new Date(2026, 1, 20))).toBe(8);
   });
 });
 
