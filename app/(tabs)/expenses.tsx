@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
-import { Alert, FlatList, Image, Pressable, StyleSheet, TextInput } from 'react-native';
+import { FlatList, Image, Pressable, StyleSheet, TextInput } from 'react-native';
 
 import { ChipPicker } from '@/components/ChipPicker';
 import { Text, View } from '@/components/Themed';
@@ -11,7 +11,7 @@ import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
-import type { Expense } from '@/types';
+import { theme } from '@/theme';
 import { hasOverThresholdBudget } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
 import { currentMonth, formatDate, isValidDateString } from '@/utils/date';
@@ -24,7 +24,6 @@ export default function ExpenseListScreen() {
   const account = useSettingsStore((state) => state.account);
   const expenses = useExpenseStore((state) => state.expenses);
   const loadExpenses = useExpenseStore((state) => state.load);
-  const removeExpense = useExpenseStore((state) => state.removeExpense);
   const categories = useCategoryStore((state) => state.categories);
   const budgets = useBudgetStore((state) => state.budgets);
   const loadBudgets = useBudgetStore((state) => state.load);
@@ -70,27 +69,6 @@ export default function ExpenseListScreen() {
       setRefreshing(false);
     }
   }, [account, loadExpenses]);
-
-  function confirmDelete(expense: Expense) {
-    Alert.alert(
-      'Delete expense?',
-      expense.description
-        ? `"${expense.description}" will be permanently deleted.`
-        : 'This expense will be permanently deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            removeExpense(expense.id).catch((err) => {
-              Alert.alert('Failed to delete', err instanceof Error ? err.message : 'Unknown error');
-            });
-          },
-        },
-      ]
-    );
-  }
 
   function openEdit(id: string) {
     router.push({ pathname: '/edit-expense/[id]', params: { id } });
@@ -215,7 +193,12 @@ export default function ExpenseListScreen() {
                 {item.receiptPhotoPath ? (
                   <Image source={{ uri: item.receiptPhotoPath }} style={styles.iconCircle} />
                 ) : (
-                  <View style={[styles.iconCircle, { backgroundColor: category?.color ?? '#999' }]}>
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      { backgroundColor: category?.color ?? theme.categoryFallback },
+                    ]}
+                  >
                     <Ionicons
                       name={(category?.icon as IoniconName) ?? 'help-circle'}
                       size={18}
@@ -234,9 +217,6 @@ export default function ExpenseListScreen() {
               </Pressable>
               <Pressable onPress={() => openEdit(item.id)} hitSlop={8} style={styles.rowIcon}>
                 <Ionicons name="create-outline" size={20} color={Colors[colorScheme].text} />
-              </Pressable>
-              <Pressable onPress={() => confirmDelete(item)} hitSlop={8} style={styles.rowIcon}>
-                <Ionicons name="trash-outline" size={20} color={Colors[colorScheme].warning} />
               </Pressable>
             </View>
           );
