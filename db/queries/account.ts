@@ -14,6 +14,7 @@ function toUserAccount(row: typeof users.$inferSelect): UserAccount {
     sharingEnabled: row.sharingEnabled,
     notificationsEnabled: row.notificationsEnabled,
     budgetAlertsEnabled: row.budgetAlertsEnabled,
+    payday: row.payday,
     createdAt: row.createdAt,
   };
 }
@@ -48,9 +49,14 @@ export interface UpdateAccountInput {
   sharingEnabled?: boolean;
   notificationsEnabled?: boolean;
   budgetAlertsEnabled?: boolean;
+  payday?: number;
 }
 
 export async function updateAccount(id: string, input: UpdateAccountInput): Promise<UserAccount> {
+  if (input.payday !== undefined && (input.payday < 1 || input.payday > 31)) {
+    throw new Error('Payday must be between 1 and 31');
+  }
+
   const values: Partial<typeof users.$inferInsert> = {};
   if (input.accountType !== undefined) values.accountType = input.accountType;
   if (input.currency !== undefined) values.currency = input.currency;
@@ -59,6 +65,7 @@ export async function updateAccount(id: string, input: UpdateAccountInput): Prom
     values.notificationsEnabled = input.notificationsEnabled;
   if (input.budgetAlertsEnabled !== undefined)
     values.budgetAlertsEnabled = input.budgetAlertsEnabled;
+  if (input.payday !== undefined) values.payday = input.payday;
 
   const [updated] = await db.update(users).set(values).where(eq(users.id, id)).returning();
 

@@ -8,6 +8,13 @@
       "when": 1785444412081,
       "tag": "0000_tan_shooting_star",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785854763283,
+      "tag": "0001_milky_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

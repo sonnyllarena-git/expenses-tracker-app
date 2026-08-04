@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
 
@@ -21,6 +22,16 @@ export default function SettingsScreen() {
 
   function handleUpdateError(err: unknown) {
     Alert.alert('Failed to save', err instanceof Error ? err.message : 'Unknown error');
+  }
+
+  function adjustPayday(delta: number) {
+    if (!account) {
+      return;
+    }
+    const next = Math.min(31, Math.max(1, account.payday + delta));
+    if (next !== account.payday) {
+      updateAccount({ payday: next }).catch(handleUpdateError);
+    }
   }
 
   function handleDeleteAll() {
@@ -75,6 +86,28 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionLabel}>Payday</Text>
+        <Text style={styles.paydayCaption}>Day of the month your income typically lands.</Text>
+        <View style={styles.paydayRow}>
+          <Pressable onPress={() => adjustPayday(-1)} hitSlop={8} disabled={!account}>
+            <Ionicons
+              name="chevron-back-circle-outline"
+              size={28}
+              color={Colors[colorScheme].primary}
+            />
+          </Pressable>
+          <Text style={styles.paydayValue}>Day {account?.payday ?? 25}</Text>
+          <Pressable onPress={() => adjustPayday(1)} hitSlop={8} disabled={!account}>
+            <Ionicons
+              name="chevron-forward-circle-outline"
+              size={28}
+              color={Colors[colorScheme].primary}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
         <SettingsToggleRow
           label="Family Sharing"
           caption="Family member management is coming in a future update."
@@ -102,11 +135,11 @@ export default function SettingsScreen() {
           disabled={resetting}
           style={[
             styles.dangerButton,
-            { borderColor: Colors[colorScheme].warning },
+            { borderColor: Colors[colorScheme].error },
             resetting && styles.disabled,
           ]}
         >
-          <Text style={[styles.dangerButtonText, { color: Colors[colorScheme].warning }]}>
+          <Text style={[styles.dangerButtonText, { color: Colors[colorScheme].error }]}>
             {resetting ? 'Deleting…' : 'Delete All Data'}
           </Text>
         </Pressable>
@@ -138,6 +171,23 @@ const styles = StyleSheet.create({
   },
   sectionLabelSpaced: {
     marginTop: 12,
+  },
+  paydayCaption: {
+    fontSize: 12,
+    opacity: 0.6,
+  },
+  paydayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 4,
+  },
+  paydayValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    minWidth: 80,
+    textAlign: 'center',
   },
   dangerButton: {
     borderWidth: 1.5,

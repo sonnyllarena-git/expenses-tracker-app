@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `payday` integer DEFAULT 25 NOT NULL;

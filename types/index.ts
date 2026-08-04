@@ -12,6 +12,7 @@ export interface UserAccount {
   sharingEnabled: boolean;
   notificationsEnabled: boolean;
   budgetAlertsEnabled: boolean;
+  payday: number;
   createdAt: string;
 }
 

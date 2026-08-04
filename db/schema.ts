@@ -13,6 +13,9 @@ export const users = sqliteTable('users', {
   budgetAlertsEnabled: integer('budget_alerts_enabled', { mode: 'boolean' })
     .notNull()
     .default(true),
+  // Day of month salary/income typically lands, 1-31; clamped to the last
+  // day of shorter months at read time (see utils/date.ts's daysUntilPayday).
+  payday: integer('payday').notNull().default(25),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(current_timestamp)`),
