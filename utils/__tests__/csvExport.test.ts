@@ -16,6 +16,7 @@ function makeExpense(overrides: Partial<Expense>): Expense {
     recurringFrequency: null,
     recurringTemplateId: null,
     budgetId: null,
+    walletId: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
     ...overrides,

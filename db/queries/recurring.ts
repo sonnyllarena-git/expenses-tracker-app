@@ -21,6 +21,7 @@ function toExpense(row: typeof expenses.$inferSelect): Expense {
     recurringFrequency: row.recurringFrequency as RecurringFrequency | null,
     recurringTemplateId: row.recurringTemplateId,
     budgetId: row.budgetId,
+    walletId: row.walletId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

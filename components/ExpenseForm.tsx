@@ -4,15 +4,22 @@ import * as ImagePicker from 'expo-image-picker';
 import { useState, type ComponentProps } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 
+import { ChipPicker } from '@/components/ChipPicker';
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { WALLET_TYPE_OPTIONS } from '@/constants/wallets';
 import { useCategoryStore } from '@/store/useCategoryStore';
+import { useWalletStore } from '@/store/useWalletStore';
 import type { Expense } from '@/types';
 import { isValidDateString, today } from '@/utils/date';
 import { generateId } from '@/utils/uuid';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+// Sentinel for "no wallet" in the picker — kept out of the real id space so
+// it can share ChipPicker's string-keyed selection state with real wallet ids.
+const NO_WALLET = '__none__';
 
 export interface ExpenseFormValues {
   amount: number;
@@ -20,6 +27,8 @@ export interface ExpenseFormValues {
   date: string;
   description: string;
   receiptPhotoPath: string | null;
+  /** Which wallet this was paid from; null if not tied to a wallet. */
+  walletId: string | null;
 }
 
 interface ExpenseFormProps {
@@ -32,6 +41,7 @@ interface ExpenseFormProps {
 /** Add/Edit expense form, shared by the Add tab and the edit-expense screen. */
 export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFormProps) {
   const categories = useCategoryStore((state) => state.categories);
+  const wallets = useWalletStore((state) => state.wallets);
   const colorScheme = useColorScheme();
 
   const [amountText, setAmountText] = useState(initialExpense ? String(initialExpense.amount) : '');
@@ -42,6 +52,9 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
   const [description, setDescription] = useState(initialExpense?.description ?? '');
   const [receiptPhotoPath, setReceiptPhotoPath] = useState<string | null>(
     initialExpense?.receiptPhotoPath ?? null
+  );
+  const [selectedWalletId, setSelectedWalletId] = useState<string>(
+    initialExpense?.walletId ?? NO_WALLET
   );
   const [saving, setSaving] = useState(false);
   const [pickingPhoto, setPickingPhoto] = useState(false);
@@ -100,6 +113,7 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
         date: dateText,
         description: description.trim(),
         receiptPhotoPath,
+        walletId: selectedWalletId === NO_WALLET ? null : selectedWalletId,
       });
       // Reset to a blank form after a successful add, so another expense can
       // be logged right away. Edit mode skips this — the caller navigates
@@ -110,6 +124,7 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
         setDateText(today());
         setDescription('');
         setReceiptPhotoPath(null);
+        setSelectedWalletId(NO_WALLET);
       }
     } catch (err) {
       Alert.alert('Failed to save expense', err instanceof Error ? err.message : 'Unknown error');
@@ -176,6 +191,22 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
         placeholderTextColor={Colors[colorScheme].tabIconDefault}
         autoCapitalize="none"
         autoCorrect={false}
+      />
+
+      <Text style={styles.label}>Paid from</Text>
+      <ChipPicker
+        options={[
+          { value: NO_WALLET, label: 'None' },
+          ...wallets.map((wallet) => ({
+            value: wallet.id,
+            label: wallet.name,
+            icon: WALLET_TYPE_OPTIONS.find((o) => o.value === wallet.type)?.icon as
+              | IoniconName
+              | undefined,
+          })),
+        ]}
+        selectedValue={selectedWalletId}
+        onSelect={setSelectedWalletId}
       />
 
       <Text style={styles.label}>Description</Text>

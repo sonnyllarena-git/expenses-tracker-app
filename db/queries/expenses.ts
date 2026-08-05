@@ -1,9 +1,14 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql, type ExtractTablesWithRelations } from 'drizzle-orm';
+import type { ExpoSQLiteTransaction } from 'drizzle-orm/expo-sqlite';
 
 import { db } from '../client';
-import { expenses } from '../schema';
+import { expenses, wallets, walletTransactions } from '../schema';
+import type * as schema from '../schema';
 import { generateId } from '@/utils/uuid';
+import { walletBalanceAdjustments } from '@/utils/wallet';
 import type { Expense, RecurringFrequency } from '@/types';
+
+type Tx = ExpoSQLiteTransaction<typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
 function toExpense(row: typeof expenses.$inferSelect): Expense {
   return {
@@ -20,6 +25,7 @@ function toExpense(row: typeof expenses.$inferSelect): Expense {
     recurringFrequency: row.recurringFrequency as RecurringFrequency | null,
     recurringTemplateId: row.recurringTemplateId,
     budgetId: row.budgetId,
+    walletId: row.walletId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -34,6 +40,8 @@ export interface NewExpenseInput {
   description?: string;
   tags?: string[];
   receiptPhotoPath?: string | null;
+  /** Which wallet this was paid from. Omit for expenses not tied to a wallet. */
+  walletId?: string | null;
 }
 
 /**
@@ -51,27 +59,101 @@ export async function listExpenses(userId: string): Promise<Expense[]> {
   return rows.map(toExpense);
 }
 
-/** One-off (non-recurring) expense insert. Recurring-template creation lands in Weeks 2-4. */
+/**
+ * WALLET INTEGRATION — READ BEFORE TOUCHING insert/update/deleteExpense:
+ *
+ * expo-sqlite's drizzle driver executes every statement synchronously
+ * under the hood, and db.transaction()'s begin/callback/commit sequence is
+ * itself a plain synchronous function (see node_modules/drizzle-orm/
+ * expo-sqlite/session.js). If the callback passed to db.transaction() is
+ * `async` and contains `await`, the callback returns a pending Promise the
+ * instant it hits that `await`, and the transaction wrapper — which does
+ * NOT await its callback — immediately runs COMMIT right then, before any
+ * of the awaited statements have actually executed. The statements still
+ * run eventually (on a later microtask), but by then the transaction has
+ * already been committed (or, on error, has nothing open left to roll
+ * back), so nothing inside is actually atomic.
+ *
+ * The fix: transaction callbacks here must be plain synchronous functions,
+ * and every statement inside must call `.run()` / `.all()` / `.get()`
+ * directly instead of being awaited — that forces synchronous execution
+ * within the begin/commit window. Do not write `async (tx) => { await ... }`
+ * in this file.
+ */
+
+function syncWalletForExpense(
+  tx: Tx,
+  expenseId: string,
+  next: { walletId: string; amount: number; date: string; description: string } | null
+): void {
+  const linked = tx
+    .select()
+    .from(walletTransactions)
+    .where(eq(walletTransactions.expenseId, expenseId))
+    .all();
+  const previous = linked[0] ? { walletId: linked[0].walletId, amount: linked[0].amount } : null;
+
+  for (const adjustment of walletBalanceAdjustments(previous, next)) {
+    tx.update(wallets)
+      .set({ balance: sql`${wallets.balance} + ${adjustment.delta}` })
+      .where(eq(wallets.id, adjustment.walletId))
+      .run();
+  }
+
+  if (linked.length > 0) {
+    tx.delete(walletTransactions).where(eq(walletTransactions.expenseId, expenseId)).run();
+  }
+
+  if (next) {
+    tx.insert(walletTransactions)
+      .values({
+        id: generateId(),
+        walletId: next.walletId,
+        expenseId,
+        amount: next.amount,
+        type: 'debit',
+        description: next.description,
+        date: next.date,
+      })
+      .run();
+  }
+}
+
 export async function insertExpense(input: NewExpenseInput): Promise<Expense> {
   if (input.amount <= 0) {
     throw new Error('Expense amount must be positive');
   }
 
-  const [created] = await db
-    .insert(expenses)
-    .values({
-      id: generateId(),
-      userId: input.userId,
-      addedByUserId: input.addedByUserId ?? null,
-      amount: input.amount,
-      categoryId: input.categoryId,
-      date: input.date,
-      description: input.description ?? '',
-      tags: JSON.stringify(input.tags ?? []),
-      receiptPhotoPath: input.receiptPhotoPath ?? null,
-      isRecurring: false,
-    })
-    .returning();
+  const created = db.transaction((tx) => {
+    const [row] = tx
+      .insert(expenses)
+      .values({
+        id: generateId(),
+        userId: input.userId,
+        addedByUserId: input.addedByUserId ?? null,
+        amount: input.amount,
+        categoryId: input.categoryId,
+        date: input.date,
+        description: input.description ?? '',
+        tags: JSON.stringify(input.tags ?? []),
+        receiptPhotoPath: input.receiptPhotoPath ?? null,
+        isRecurring: false,
+        walletId: input.walletId ?? null,
+      })
+      .returning()
+      .all();
+
+    if (input.walletId) {
+      syncWalletForExpense(tx, row.id, {
+        walletId: input.walletId,
+        amount: input.amount,
+        date: input.date,
+        description: input.description ?? '',
+      });
+    }
+
+    return row;
+  });
 
   return toExpense(created);
 }
@@ -83,6 +165,8 @@ export interface UpdateExpenseInput {
   description?: string;
   tags?: string[];
   receiptPhotoPath?: string | null;
+  /** Explicit `null` clears the wallet; omit the key to leave it unchanged. */
+  walletId?: string | null;
 }
 
 export async function updateExpense(id: string, input: UpdateExpenseInput): Promise<Expense> {
@@ -90,27 +174,55 @@ export async function updateExpense(id: string, input: UpdateExpenseInput): Prom
     throw new Error('Expense amount must be positive');
   }
 
-  const values: Partial<typeof expenses.$inferInsert> = {
-    updatedAt: new Date().toISOString(),
-  };
-  if (input.amount !== undefined) values.amount = input.amount;
-  if (input.categoryId !== undefined) values.categoryId = input.categoryId;
-  if (input.date !== undefined) values.date = input.date;
-  if (input.description !== undefined) values.description = input.description;
-  if (input.tags !== undefined) values.tags = JSON.stringify(input.tags);
-  if (input.receiptPhotoPath !== undefined) values.receiptPhotoPath = input.receiptPhotoPath;
+  const updated = db.transaction((tx) => {
+    const [existing] = tx.select().from(expenses).where(eq(expenses.id, id)).all();
+    if (!existing) {
+      throw new Error(`No expense found with id ${id}`);
+    }
 
-  const [updated] = await db.update(expenses).set(values).where(eq(expenses.id, id)).returning();
+    const values: Partial<typeof expenses.$inferInsert> = {
+      updatedAt: new Date().toISOString(),
+    };
+    if (input.amount !== undefined) values.amount = input.amount;
+    if (input.categoryId !== undefined) values.categoryId = input.categoryId;
+    if (input.date !== undefined) values.date = input.date;
+    if (input.description !== undefined) values.description = input.description;
+    if (input.tags !== undefined) values.tags = JSON.stringify(input.tags);
+    if (input.receiptPhotoPath !== undefined) values.receiptPhotoPath = input.receiptPhotoPath;
+    if (input.walletId !== undefined) values.walletId = input.walletId;
 
-  if (!updated) {
-    throw new Error(`No expense found with id ${id}`);
-  }
+    const [row] = tx.update(expenses).set(values).where(eq(expenses.id, id)).returning().all();
+
+    const finalWalletId = input.walletId !== undefined ? input.walletId : existing.walletId;
+    const finalAmount = input.amount !== undefined ? input.amount : existing.amount;
+    const finalDate = input.date !== undefined ? input.date : existing.date;
+    const finalDescription =
+      input.description !== undefined ? input.description : existing.description;
+
+    syncWalletForExpense(
+      tx,
+      id,
+      finalWalletId
+        ? {
+            walletId: finalWalletId,
+            amount: finalAmount,
+            date: finalDate,
+            description: finalDescription,
+          }
+        : null
+    );
+
+    return row;
+  });
 
   return toExpense(updated);
 }
 
 export async function deleteExpense(id: string): Promise<void> {
-  await db.delete(expenses).where(eq(expenses.id, id));
+  db.transaction((tx) => {
+    syncWalletForExpense(tx, id, null);
+    tx.delete(expenses).where(eq(expenses.id, id)).run();
+  });
 }
 
 export async function listExpensesByCategory(
