@@ -14,6 +14,8 @@ import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useWalletStore } from '@/store/useWalletStore';
+import { theme } from '@/theme';
 import type { Budget } from '@/types';
 import { expensesToCsv } from '@/utils/csvExport';
 import { formatCurrency } from '@/utils/currency';
@@ -22,7 +24,9 @@ import {
   budgetVsActual,
   groupExpensesByCategory,
   groupExpensesByDay,
+  groupExpensesByWallet,
   groupExpensesByWeek,
+  topWalletByWeek,
 } from '@/utils/reports';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -59,6 +63,7 @@ export default function ReportsScreen() {
   const account = useSettingsStore((state) => state.account);
   const categories = useCategoryStore((state) => state.categories);
   const expenses = useExpenseStore((state) => state.expenses);
+  const wallets = useWalletStore((state) => state.wallets);
   const budgets = useBudgetStore((state) => state.budgets);
   const loadBudgets = useBudgetStore((state) => state.load);
   const addBudget = useBudgetStore((state) => state.addBudget);
@@ -99,6 +104,21 @@ export default function ReportsScreen() {
     frontColor: Colors[colorScheme].primary,
   }));
   const hasTrendData = dailyPoints.some((point) => point.value > 0);
+
+  const walletSlices = groupExpensesByWallet(expenses, wallets, month);
+  const walletMonthTotal = walletSlices.reduce((sum, slice) => sum + slice.value, 0);
+  const walletColorFor = (walletId: string | null) => {
+    if (walletId === null) {
+      return theme.categoryFallback;
+    }
+    const index = wallets.findIndex((w) => w.id === walletId);
+    return theme.categoryPalette[index % theme.categoryPalette.length];
+  };
+  const walletPieData = walletSlices.map((slice) => ({
+    value: slice.value,
+    color: walletColorFor(slice.walletId),
+  }));
+  const walletWeeklyUsage = topWalletByWeek(expenses, wallets, month);
 
   const budgetRows = budgetVsActual(budgets, expenses, categories, month);
   const budgetedCategoryIds = new Set(budgetRows.map((row) => row.budget.categoryId));
@@ -228,6 +248,58 @@ export default function ReportsScreen() {
                 </View>
               ))}
             </View>
+          </>
+        ) : (
+          <Text style={styles.emptyText}>No expenses this month yet.</Text>
+        )}
+      </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionTitle}>Payment Methods</Text>
+        {walletSlices.length > 0 ? (
+          <>
+            <View style={styles.pieRow}>
+              <PieChart
+                data={walletPieData}
+                donut
+                radius={90}
+                innerRadius={55}
+                centerLabelComponent={() => (
+                  <Text style={styles.pieCenterLabel}>
+                    {formatCurrency(walletMonthTotal, currency)}
+                  </Text>
+                )}
+              />
+            </View>
+            <View style={styles.legend}>
+              {walletSlices.map((slice) => (
+                <View key={slice.walletId ?? 'unassigned'} style={styles.legendRow}>
+                  <View
+                    style={[
+                      styles.legendDot,
+                      { backgroundColor: walletColorFor(slice.walletId) },
+                    ]}
+                  />
+                  <Text style={styles.legendText}>
+                    {slice.name} ·{' '}
+                    {walletMonthTotal > 0 ? Math.round((slice.value / walletMonthTotal) * 100) : 0}%
+                    · {formatCurrency(slice.value, currency)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>
+              Most-used wallet by week
+            </Text>
+            {walletWeeklyUsage.map((point) => (
+              <Text key={point.label} style={styles.weeklyUsageText}>
+                {point.label}:{' '}
+                {point.topWalletName
+                  ? `${point.topWalletName} (${formatCurrency(point.topWalletAmount, currency)})`
+                  : 'No expenses'}
+              </Text>
+            ))}
           </>
         ) : (
           <Text style={styles.emptyText}>No expenses this month yet.</Text>
@@ -458,6 +530,11 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 13,
+  },
+  weeklyUsageText: {
+    fontSize: 13,
+    opacity: 0.8,
+    marginTop: 2,
   },
   chartRow: {
     marginTop: 8,

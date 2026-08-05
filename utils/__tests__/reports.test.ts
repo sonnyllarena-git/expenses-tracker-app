@@ -2,10 +2,12 @@ import {
   budgetVsActual,
   groupExpensesByCategory,
   groupExpensesByDay,
+  groupExpensesByWallet,
   groupExpensesByWeek,
+  topWalletByWeek,
 } from '../reports';
 import { theme } from '@/theme';
-import type { Budget, Category, Expense } from '@/types';
+import type { Budget, Category, Expense, Wallet } from '@/types';
 
 function makeExpense(overrides: Partial<Expense>): Expense {
   return {
@@ -22,6 +24,7 @@ function makeExpense(overrides: Partial<Expense>): Expense {
     recurringFrequency: null,
     recurringTemplateId: null,
     budgetId: null,
+    walletId: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
     ...overrides,
@@ -36,6 +39,20 @@ function makeCategory(overrides: Partial<Category>): Category {
     icon: 'fast-food',
     color: '#F4511E',
     isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeWallet(overrides: Partial<Wallet>): Wallet {
+  return {
+    id: 'wallet-gcash',
+    userId: 'user-1',
+    name: 'GCash',
+    type: 'gcash',
+    balance: 10000,
+    currency: 'PHP',
+    isArchived: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     ...overrides,
   };
@@ -136,6 +153,79 @@ describe('groupExpensesByWeek', () => {
     const points = groupExpensesByWeek(expenses, '2026-08');
     expect(points[0]).toEqual({ label: 'Aug 1-7', value: 150 });
     expect(points[1]).toEqual({ label: 'Aug 8-14', value: 20 });
+  });
+});
+
+describe('groupExpensesByWallet', () => {
+  const wallets = [
+    makeWallet({}),
+    makeWallet({ id: 'wallet-cash', name: 'Cash', type: 'cash' }),
+  ];
+
+  it('sums amounts per wallet, sorted descending', () => {
+    const expenses = [
+      makeExpense({ walletId: 'wallet-gcash', amount: 550, date: '2026-08-01' }),
+      makeExpense({ walletId: 'wallet-gcash', amount: 300, date: '2026-08-02' }),
+      makeExpense({ walletId: 'wallet-cash', amount: 150, date: '2026-08-03' }),
+      makeExpense({ walletId: 'wallet-gcash', amount: 999, date: '2026-07-31' }), // outside month
+    ];
+
+    expect(groupExpensesByWallet(expenses, wallets, '2026-08')).toEqual([
+      { walletId: 'wallet-gcash', name: 'GCash', value: 850 },
+      { walletId: 'wallet-cash', name: 'Cash', value: 150 },
+    ]);
+  });
+
+  it('buckets expenses with no walletId as Unassigned', () => {
+    const expenses = [
+      makeExpense({ walletId: null, amount: 200, date: '2026-08-01' }),
+      makeExpense({ walletId: 'wallet-gcash', amount: 100, date: '2026-08-02' }),
+    ];
+
+    expect(groupExpensesByWallet(expenses, wallets, '2026-08')).toEqual([
+      { walletId: null, name: 'Unassigned', value: 200 },
+      { walletId: 'wallet-gcash', name: 'GCash', value: 100 },
+    ]);
+  });
+
+  it('returns an empty array when nothing falls in the given month', () => {
+    const expenses = [makeExpense({ walletId: 'wallet-gcash', date: '2026-07-01' })];
+    expect(groupExpensesByWallet(expenses, wallets, '2026-08')).toEqual([]);
+  });
+});
+
+describe('topWalletByWeek', () => {
+  const wallets = [
+    makeWallet({}),
+    makeWallet({ id: 'wallet-cash', name: 'Cash', type: 'cash' }),
+  ];
+
+  it('picks the highest-spend wallet for each week', () => {
+    const expenses = [
+      makeExpense({ walletId: 'wallet-gcash', amount: 500, date: '2026-08-01' }),
+      makeExpense({ walletId: 'wallet-cash', amount: 100, date: '2026-08-02' }),
+      makeExpense({ walletId: 'wallet-cash', amount: 900, date: '2026-08-08' }),
+    ];
+
+    const points = topWalletByWeek(expenses, wallets, '2026-08');
+
+    expect(points[0]).toEqual({ label: 'Aug 1-7', topWalletName: 'GCash', topWalletAmount: 500 });
+    expect(points[1]).toEqual({ label: 'Aug 8-14', topWalletName: 'Cash', topWalletAmount: 900 });
+  });
+
+  it('reports null when a week has no expenses at all', () => {
+    const points = topWalletByWeek([], wallets, '2026-08');
+    expect(points.every((p) => p.topWalletName === null && p.topWalletAmount === 0)).toBe(true);
+  });
+
+  it('counts unassigned expenses toward the Unassigned bucket', () => {
+    const expenses = [makeExpense({ walletId: null, amount: 300, date: '2026-08-01' })];
+    const points = topWalletByWeek(expenses, wallets, '2026-08');
+    expect(points[0]).toEqual({
+      label: 'Aug 1-7',
+      topWalletName: 'Unassigned',
+      topWalletAmount: 300,
+    });
   });
 });
 

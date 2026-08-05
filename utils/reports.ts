@@ -1,6 +1,9 @@
 import { theme } from '@/theme';
-import type { Budget, Category, Expense } from '@/types';
+import type { Budget, Category, Expense, Wallet } from '@/types';
 import { daysInMonth } from '@/utils/date';
+
+const UNASSIGNED_WALLET_KEY = '__unassigned__';
+export const UNASSIGNED_WALLET_LABEL = 'Unassigned';
 
 export interface CategorySlice {
   categoryId: string;
@@ -96,6 +99,106 @@ export function groupExpensesByWeek(expenses: Expense[], month: string): WeeklyS
       month: 'short',
     });
     points.push({ label: `${monthAbbrev} ${start}-${end}`, value });
+  }
+
+  return points;
+}
+
+export interface WalletSlice {
+  /** Null for the "Unassigned" bucket (expenses with no walletId). */
+  walletId: string | null;
+  name: string;
+  value: number;
+}
+
+/**
+ * Sums the given month's expenses per wallet, sorted descending by amount.
+ * Expenses with no walletId are grouped into an "Unassigned" bucket instead
+ * of being dropped, so the distribution always accounts for every expense.
+ */
+export function groupExpensesByWallet(
+  expenses: Expense[],
+  wallets: Wallet[],
+  month: string
+): WalletSlice[] {
+  const totals = new Map<string, number>();
+  for (const expense of expenses) {
+    if (!expense.date.startsWith(month)) {
+      continue;
+    }
+    const key = expense.walletId ?? UNASSIGNED_WALLET_KEY;
+    totals.set(key, (totals.get(key) ?? 0) + expense.amount);
+  }
+
+  const slices: WalletSlice[] = [];
+  for (const [key, value] of totals) {
+    if (value <= 0) {
+      continue;
+    }
+    if (key === UNASSIGNED_WALLET_KEY) {
+      slices.push({ walletId: null, name: UNASSIGNED_WALLET_LABEL, value });
+    } else {
+      const wallet = wallets.find((w) => w.id === key);
+      slices.push({ walletId: key, name: wallet?.name ?? 'Unknown Wallet', value });
+    }
+  }
+
+  return slices.sort((a, b) => b.value - a.value);
+}
+
+export interface WalletUsagePoint {
+  label: string;
+  /** Null when no expenses fell in this week at all. */
+  topWalletName: string | null;
+  topWalletAmount: number;
+}
+
+/** For each 7-day chunk of the given month, which wallet had the highest spend. */
+export function topWalletByWeek(
+  expenses: Expense[],
+  wallets: Wallet[],
+  month: string
+): WalletUsagePoint[] {
+  const [year, monthNum] = month.split('-').map(Number);
+  const lastDay = daysInMonth(month);
+  const points: WalletUsagePoint[] = [];
+
+  for (let start = 1; start <= lastDay; start += 7) {
+    const end = Math.min(start + 6, lastDay);
+    const weekExpenses = expenses.filter((e) => {
+      if (!e.date.startsWith(month)) {
+        return false;
+      }
+      const day = Number(e.date.slice(8, 10));
+      return day >= start && day <= end;
+    });
+
+    const totals = new Map<string, number>();
+    for (const expense of weekExpenses) {
+      const key = expense.walletId ?? UNASSIGNED_WALLET_KEY;
+      totals.set(key, (totals.get(key) ?? 0) + expense.amount);
+    }
+
+    let topKey: string | null = null;
+    let topAmount = 0;
+    for (const [key, amount] of totals) {
+      if (amount > topAmount) {
+        topKey = key;
+        topAmount = amount;
+      }
+    }
+
+    const topWalletName =
+      topKey === null
+        ? null
+        : topKey === UNASSIGNED_WALLET_KEY
+          ? UNASSIGNED_WALLET_LABEL
+          : wallets.find((w) => w.id === topKey)?.name ?? 'Unknown Wallet';
+
+    const monthAbbrev = new Date(year, monthNum - 1, start).toLocaleDateString('en-US', {
+      month: 'short',
+    });
+    points.push({ label: `${monthAbbrev} ${start}-${end}`, topWalletName, topWalletAmount: topAmount });
   }
 
   return points;
