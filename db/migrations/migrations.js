@@ -4,13 +4,15 @@ import journal from './meta/_journal.json';
 import m0000 from './0000_tan_shooting_star.sql';
 import m0001 from './0001_milky_supreme_intelligence.sql';
 import m0002 from './0002_youthful_radioactive_man.sql';
+import m0003 from './0003_tan_otto_octavius.sql';
 
   export default {
     journal,
     migrations: {
       m0000,
 m0001,
-m0002
+m0002,
+m0003
     }
   }
   

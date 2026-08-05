@@ -55,6 +55,22 @@ export const budgets = sqliteTable(
   (table) => [index('idx_budgets_user_month').on(table.userId, table.month)]
 );
 
+export const wallets = sqliteTable('wallets', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id),
+  name: text('name').notNull(),
+  // WalletType union (types/index.ts) stored as free text — no DB-level enum in SQLite.
+  type: text('type').notNull(),
+  balance: real('balance').notNull(),
+  currency: text('currency').notNull().default('PHP'),
+  isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(current_timestamp)`),
+});
+
 export const expenses = sqliteTable(
   'expenses',
   {
@@ -78,6 +94,9 @@ export const expenses = sqliteTable(
     // Set on rows materialized from a recurring template; points back at the template row.
     recurringTemplateId: text('recurring_template_id'),
     budgetId: text('budget_id').references(() => budgets.id),
+    // Nullable — which wallet this was paid from; omitted for quick entries and all
+    // pre-existing expenses. See db/queries/expenses.ts for the balance-sync logic.
+    walletId: text('wallet_id').references(() => wallets.id),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -89,6 +108,27 @@ export const expenses = sqliteTable(
     index('idx_expenses_user_date').on(table.userId, table.date),
     index('idx_expenses_user_category').on(table.userId, table.categoryId),
   ]
+);
+
+export const walletTransactions = sqliteTable(
+  'wallet_transactions',
+  {
+    id: text('id').primaryKey(),
+    walletId: text('wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    // Set for transactions created from an expense; null for manual balance adjustments.
+    expenseId: text('expense_id').references(() => expenses.id),
+    amount: real('amount').notNull(),
+    // 'debit' reduces the wallet balance, 'credit' increases it.
+    type: text('type').notNull(),
+    description: text('description').notNull().default(''),
+    date: text('date').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index('idx_wallet_transactions_wallet').on(table.walletId)]
 );
 
 export const income = sqliteTable(

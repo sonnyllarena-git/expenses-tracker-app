@@ -4,6 +4,17 @@ export type RecurringFrequency = 'daily' | 'weekly' | 'monthly';
 
 export type FamilyRole = 'admin' | 'editor' | 'viewer';
 
+export type WalletType =
+  | 'gcash'
+  | 'credit_card'
+  | 'cash'
+  | 'debit_card'
+  | 'online_money'
+  | 'bitcoin'
+  | 'other';
+
+export type WalletTransactionType = 'debit' | 'credit';
+
 export interface UserAccount {
   id: string;
   email: string | null;
@@ -40,8 +51,31 @@ export interface Expense {
   recurringFrequency: RecurringFrequency | null;
   recurringTemplateId: string | null;
   budgetId: string | null;
+  walletId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Wallet {
+  id: string;
+  userId: string;
+  name: string;
+  type: WalletType;
+  balance: number;
+  currency: string;
+  isArchived: boolean;
+  createdAt: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  walletId: string;
+  expenseId: string | null;
+  amount: number;
+  type: WalletTransactionType;
+  description: string;
+  date: string;
+  createdAt: string;
 }
 
 export interface Budget {
