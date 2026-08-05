@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack } from 'expo-router';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Pressable, StyleSheet } from 'react-native';
 
 import { RecurringForm, type RecurringFormValues } from '@/components/RecurringForm';
 import { Text, View } from '@/components/Themed';
@@ -19,7 +18,8 @@ import { recurringStatus } from '@/utils/recurring';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-export default function RecurringScreen() {
+/** Recurring-expense management — the "Recurring Expenses" half of the Recurring & Loans sub-tab. */
+export function RecurringSection() {
   const account = useSettingsStore((state) => state.account);
   const categories = useCategoryStore((state) => state.categories);
   const expenses = useExpenseStore((state) => state.expenses);
@@ -90,11 +90,9 @@ export default function RecurringScreen() {
   const editingTemplate = templates.find((t) => t.id === editingId);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: 'Recurring Expenses' }} />
-
+    <View style={styles.stack}>
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
-        <Text style={styles.sectionTitle}>Active &amp; Paused</Text>
+        <Text style={styles.sectionTitle}>Recurring Expenses</Text>
         {templates.length === 0 && <Text style={styles.emptyText}>No recurring expenses yet.</Text>}
         {templates.map((template) => {
           const category = categories.find((c) => c.id === template.categoryId);
@@ -102,7 +100,10 @@ export default function RecurringScreen() {
           return (
             <View key={template.id} style={styles.row}>
               <View
-                style={[styles.iconCircle, { backgroundColor: category?.color ?? theme.categoryFallback }]}
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: category?.color ?? theme.categoryFallback },
+                ]}
               >
                 <Ionicons
                   name={(category?.icon as IoniconName) ?? 'help-circle'}
@@ -158,16 +159,12 @@ export default function RecurringScreen() {
           </Pressable>
         )}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 24,
+  stack: {
     gap: 16,
   },
   card: {
