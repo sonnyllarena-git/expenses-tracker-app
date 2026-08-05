@@ -39,7 +39,12 @@ export default function ExpenseListScreen() {
   // Lets the Dashboard's "Upcoming Bills" card deep-link straight into this
   // sub-tab via router.push({ pathname: '/(tabs)/expenses', params: { tab: 'recurring' } }).
   const params = useLocalSearchParams<{ tab?: string }>();
-  const [activeTab, setActiveTab] = useState<ExpensesSubTab>('expenses');
+  // Lazy initializer so a cold navigation straight into this screen (e.g. the
+  // deep link above) lands on the right sub-tab immediately — the in-render
+  // sync below only catches `tab` changing while this screen stays mounted.
+  const [activeTab, setActiveTab] = useState<ExpensesSubTab>(() =>
+    params.tab === 'recurring' ? 'recurring' : 'expenses'
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
   const [searchQuery, setSearchQuery] = useState('');
