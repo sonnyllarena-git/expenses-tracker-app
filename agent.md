@@ -722,6 +722,12 @@ gh run view <run-id> --log
 
 ---
 
+## Critical: Drizzle expo-sqlite transaction callbacks must be sync
+
+Do NOT use async/await inside `db.transaction()` callbacks. The driver is sync under the hood — an async callback lets the transaction commit before the awaited insert runs, silently breaking atomicity. Use `.run()`/`.all()` directly inside transaction callbacks only.
+
+---
+
 ## Questions or Updates?
 
 If you have questions about this guide or need clarifications, ask directly. The skill will be updated as we learn new patterns or encounter new scenarios.
