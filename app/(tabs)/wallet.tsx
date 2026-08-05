@@ -159,7 +159,12 @@ export default function WalletScreen() {
                 <Text style={styles.walletName}>{wallet.name}</Text>
                 <Text style={styles.walletType}>{typeOption?.label ?? wallet.type}</Text>
               </View>
-              <Text style={styles.walletBalance}>
+              <Text
+                style={[
+                  styles.walletBalance,
+                  wallet.balance < 0 && { color: Colors[colorScheme].error },
+                ]}
+              >
                 {formatCurrency(wallet.balance, wallet.currency)}
               </Text>
               <Pressable onPress={() => startEdit(wallet)} hitSlop={8} style={styles.walletIcon}>
