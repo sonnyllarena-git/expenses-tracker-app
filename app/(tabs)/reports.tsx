@@ -358,6 +358,7 @@ export default function ReportsScreen() {
                   isAnimated
                   xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
                   yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                  yAxisLabelWidth={52}
                   formatYLabel={formatYAxisLabel}
                 />
               </View>
@@ -402,6 +403,7 @@ export default function ReportsScreen() {
                 isAnimated
                 xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 10 }}
                 yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                yAxisLabelWidth={52}
                 formatYLabel={formatYAxisLabel}
               />
             )}
@@ -415,6 +417,7 @@ export default function ReportsScreen() {
                 isAnimated
                 xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
                 yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                yAxisLabelWidth={52}
                 formatYLabel={formatYAxisLabel}
               />
             )}
@@ -428,6 +431,7 @@ export default function ReportsScreen() {
                 isAnimated
                 xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
                 yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                yAxisLabelWidth={52}
                 formatYLabel={formatYAxisLabel}
               />
             )}

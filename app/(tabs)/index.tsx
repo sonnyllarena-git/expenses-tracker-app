@@ -68,15 +68,12 @@ export default function DashboardScreen() {
   const currency = account?.currency ?? 'PHP';
 
   const bars = last7DaysSpend(expenses, todayIso);
-  const barData = bars.map((bar, index) => ({
+  const barData = bars.map((bar) => ({
     value: bar.value,
     label: bar.label.charAt(0),
     frontColor: Colors[colorScheme].primary,
-    topLabelComponent:
-      index === bars.length - 1
-        ? () => <Text style={styles.barTopLabel}>{formatCurrency(bar.value, currency)}</Text>
-        : undefined,
   }));
+  const todaySpend = bars[bars.length - 1]?.value ?? 0;
 
   const upcoming = upcomingRecurringExpenses(
     templates,
@@ -118,7 +115,10 @@ export default function DashboardScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
-        <Text style={styles.sectionTitle}>Last 7 Days</Text>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.sectionTitle}>Last 7 Days</Text>
+          <Text style={styles.todaySpendText}>Today: {formatCurrency(todaySpend, currency)}</Text>
+        </View>
         <View style={styles.chartRow}>
           <BarChart
             data={barData}
@@ -129,6 +129,7 @@ export default function DashboardScreen() {
             isAnimated
             xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 11 }}
             yAxisTextStyle={{ color: Colors[colorScheme].text }}
+            yAxisLabelWidth={52}
             formatYLabel={formatYAxisLabel}
           />
         </View>
@@ -181,7 +182,7 @@ export default function DashboardScreen() {
       </Pressable>
 
       <Pressable
-        onPress={() => router.push('/wallet')}
+        onPress={() => router.push({ pathname: '/wallet' })}
         style={({ pressed }) => [
           styles.netWorthCard,
           { backgroundColor: Colors[colorScheme].primary },
@@ -274,16 +275,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  todaySpendText: {
+    fontSize: 13,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
   emptyText: {
     opacity: 0.7,
   },
   chartRow: {
     alignItems: 'center',
     marginTop: 8,
-  },
-  barTopLabel: {
-    fontSize: 10,
-    fontWeight: '700',
   },
   paydayText: {
     fontSize: 16,
