@@ -4,17 +4,20 @@ import { Animated, Easing, StyleSheet } from 'react-native';
 import { theme } from '@/theme';
 import type { BudgetMood } from '@/utils/budget';
 
+// "Spidey" placeholder — a single spider glyph for every mood; only the tint
+// changes for now. The real SVG mascot (with per-mood expressions) arrives in
+// Phase 2 — this mapping is the slot it drops into.
 const MOOD_EMOJI: Record<BudgetMood, string> = {
-  happy: '😊',
-  neutral: '😐',
-  sad: '😟',
+  happy: '🕷️',
+  neutral: '🕷️',
+  sad: '🕷️',
 };
 
 // Status colors are identical across light/dark (see theme.ts), so this
 // mapping is theme-invariant and doesn't need useColorScheme().
 const MOOD_COLOR: Record<BudgetMood, string> = {
   happy: theme.light.success,
-  neutral: theme.light.warning,
+  neutral: theme.light.muted,
   sad: theme.light.error,
 };
 
@@ -23,7 +26,7 @@ interface AvatarMoodProps {
   size?: number;
 }
 
-/** Animated (Phase-1 placeholder) emoji avatar — swap for a brand avatar in Phase 2. */
+/** Animated "Spidey" placeholder avatar (Phase 1) — swap for the real SVG mascot in Phase 2. */
 export function AvatarMood({ mood, size = 72 }: AvatarMoodProps) {
   const [bounce] = useState(() => new Animated.Value(0));
 

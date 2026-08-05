@@ -2,7 +2,8 @@ import type { Budget, Expense } from '@/types';
 
 export type BudgetMood = 'happy' | 'neutral' | 'sad';
 
-function spentForCategory(expenses: Expense[], categoryId: string, month: string): number {
+/** Sum of a single category's spend within the given month. */
+export function spentForCategory(expenses: Expense[], categoryId: string, month: string): number {
   return expenses
     .filter((e) => e.categoryId === categoryId && e.date.startsWith(month))
     .reduce((sum, e) => sum + e.amount, 0);

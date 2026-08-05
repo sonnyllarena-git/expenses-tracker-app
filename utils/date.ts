@@ -23,6 +23,17 @@ export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Formats a YYYY-MM-DD date string with weekday, e.g. "Monday, August 5". */
+export function formatLongDate(isoDate: string): string {
+  // Parsed as local year/month/day for the same reason as formatDate above.
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 const MORNING_GREETINGS = ['Good morning! ☀️', 'Rise and shine! ☕'];
 const AFTERNOON_GREETINGS = ['Good afternoon! 🌤️', 'Happy coffee afternoon! ☕'];
 const EVENING_GREETINGS = ['Good evening! 🌙', 'Settle in! 🛋️'];
