@@ -117,6 +117,8 @@ export default function ExpenseListScreen() {
     return true;
   });
 
+  const filteredTotal = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+
   return (
     <View style={styles.container}>
       <View style={styles.subTabRow}>
@@ -194,6 +196,11 @@ export default function ExpenseListScreen() {
               onSelect={setSelectedCategoryId}
             />
           </View>
+
+          <Text style={styles.totalText}>
+            Total: {formatCurrency(filteredTotal, account?.currency ?? 'PHP')} ·{' '}
+            {filteredExpenses.length} {filteredExpenses.length === 1 ? 'expense' : 'expenses'}
+          </Text>
 
           <FlatList
             data={filteredExpenses}
@@ -283,6 +290,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
+  },
+  totalText: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    opacity: 0.8,
   },
   filterBar: {
     paddingHorizontal: 16,
