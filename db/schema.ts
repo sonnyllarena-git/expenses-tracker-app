@@ -150,6 +150,30 @@ export const income = sqliteTable(
   (table) => [index('idx_income_user_date').on(table.userId, table.date)]
 );
 
+export const loans = sqliteTable(
+  'loans',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    lenderName: text('lender_name').notNull(),
+    principalAmount: real('principal_amount').notNull(),
+    // Simple-interest annual rate, e.g. 0.05 for 5%. Null/0 = interest-free.
+    interestRate: real('interest_rate'),
+    monthlyPayment: real('monthly_payment').notNull(),
+    startDate: text('start_date').notNull(),
+    remainingBalance: real('remaining_balance').notNull(),
+    nextPaymentDate: text('next_payment_date').notNull(),
+    notes: text('notes').notNull().default(''),
+    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index('idx_loans_user_active').on(table.userId, table.isActive)]
+);
+
 export const familyMembers = sqliteTable('family_members', {
   id: text('id').primaryKey(),
   familyId: text('family_id').notNull(),

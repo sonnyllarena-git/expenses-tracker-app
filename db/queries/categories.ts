@@ -44,12 +44,41 @@ async function syncDefaultCategoryStyles(existing: Category[]): Promise<void> {
   }
 }
 
-/** Seeds the 7 pre-defined categories for a user, skipping if any already exist. */
+/**
+ * Inserts any DEFAULT_CATEGORIES entries an already-seeded account is missing
+ * (matched by name) — e.g. an install seeded before "Loan Payment" existed.
+ * Never touches existing rows; that's syncDefaultCategoryStyles' job.
+ */
+async function backfillMissingDefaultCategories(
+  userId: string,
+  existing: Category[]
+): Promise<number> {
+  const existingNames = new Set(existing.map((c) => c.name));
+  const missing = DEFAULT_CATEGORIES.filter((def) => !existingNames.has(def.name));
+  if (missing.length === 0) {
+    return 0;
+  }
+
+  await db.insert(categories).values(
+    missing.map((category) => ({
+      id: generateId(),
+      userId,
+      name: category.name,
+      icon: category.icon,
+      color: category.color,
+      isCustom: false,
+    }))
+  );
+
+  return missing.length;
+}
+
+/** Seeds the pre-defined categories for a user, backfilling any newly-added ones otherwise. */
 export async function seedDefaultCategories(userId: string): Promise<number> {
   const existing = await listCategories(userId);
   if (existing.length > 0) {
     await syncDefaultCategoryStyles(existing);
-    return 0;
+    return backfillMissingDefaultCategories(userId, existing);
   }
 
   await db.insert(categories).values(

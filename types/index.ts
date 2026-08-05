@@ -99,6 +99,22 @@ export interface Income {
   createdAt: string;
 }
 
+export interface Loan {
+  id: string;
+  userId: string;
+  lenderName: string;
+  principalAmount: number;
+  /** Simple-interest annual rate, e.g. 0.05 for 5%. Null/0 = interest-free. */
+  interestRate: number | null;
+  monthlyPayment: number;
+  startDate: string;
+  remainingBalance: number;
+  nextPaymentDate: string;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface FamilyMember {
   id: string;
   familyId: string;

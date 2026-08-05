@@ -52,6 +52,7 @@ export const theme = {
     '#EF4444', // Health
     '#10B981', // Shopping
     '#6B7280', // Other
+    '#0D9488', // Loan Payment
   ],
   /** Fallback swatch for a deleted/unknown category (was a bare '#999'). */
   categoryFallback: '#9CA3AF',

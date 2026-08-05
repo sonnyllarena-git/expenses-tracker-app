@@ -8,9 +8,9 @@ import { generateId } from '@/utils/uuid';
 import { walletBalanceAdjustments } from '@/utils/wallet';
 import type { Expense, RecurringFrequency } from '@/types';
 
-type Tx = ExpoSQLiteTransaction<typeof schema, ExtractTablesWithRelations<typeof schema>>;
+export type Tx = ExpoSQLiteTransaction<typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
-function toExpense(row: typeof expenses.$inferSelect): Expense {
+export function toExpense(row: typeof expenses.$inferSelect): Expense {
   return {
     id: row.id,
     userId: row.userId,
@@ -81,7 +81,13 @@ export async function listExpenses(userId: string): Promise<Expense[]> {
  * in this file.
  */
 
-function syncWalletForExpense(
+/**
+ * Exported so db/queries/loans.ts's recordLoanPayment can reuse the exact
+ * same wallet-balance math for loan payments (which are just expenses tied
+ * to a "Loan Payment" category) — see walletBalanceAdjustments' own comment
+ * on why this logic lives in exactly one place.
+ */
+export function syncWalletForExpense(
   tx: Tx,
   expenseId: string,
   next: { walletId: string; amount: number; date: string; description: string } | null

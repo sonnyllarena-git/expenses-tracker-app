@@ -13,4 +13,5 @@ export const DEFAULT_CATEGORIES = [
   { name: 'Health', icon: 'medkit', color: theme.categoryPalette[4] },
   { name: 'Shopping', icon: 'bag', color: theme.categoryPalette[5] },
   { name: 'Other', icon: 'ellipsis-horizontal', color: theme.categoryPalette[6] },
+  { name: 'Loan Payment', icon: 'cash-outline', color: theme.categoryPalette[7] },
 ] as const;
