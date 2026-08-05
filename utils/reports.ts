@@ -5,6 +5,14 @@ import { daysInMonth } from '@/utils/date';
 const UNASSIGNED_WALLET_KEY = '__unassigned__';
 export const UNASSIGNED_WALLET_LABEL = 'Unassigned';
 
+/** Truncates a label to `maxLength` characters with an ellipsis, for tight legend/chart space. */
+export function truncateLabel(label: string, maxLength = 12): string {
+  if (label.length <= maxLength) {
+    return label;
+  }
+  return `${label.slice(0, maxLength)}…`;
+}
+
 export interface CategorySlice {
   categoryId: string;
   name: string;
@@ -193,12 +201,16 @@ export function topWalletByWeek(
         ? null
         : topKey === UNASSIGNED_WALLET_KEY
           ? UNASSIGNED_WALLET_LABEL
-          : wallets.find((w) => w.id === topKey)?.name ?? 'Unknown Wallet';
+          : (wallets.find((w) => w.id === topKey)?.name ?? 'Unknown Wallet');
 
     const monthAbbrev = new Date(year, monthNum - 1, start).toLocaleDateString('en-US', {
       month: 'short',
     });
-    points.push({ label: `${monthAbbrev} ${start}-${end}`, topWalletName, topWalletAmount: topAmount });
+    points.push({
+      label: `${monthAbbrev} ${start}-${end}`,
+      topWalletName,
+      topWalletAmount: topAmount,
+    });
   }
 
   return points;

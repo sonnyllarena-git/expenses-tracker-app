@@ -30,6 +30,7 @@ import {
   greetingForNow,
   today,
 } from '@/utils/date';
+import { formatYAxisLabel } from '@/utils/chartFormat';
 import { pickDashboardInsight } from '@/utils/insight';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -128,6 +129,7 @@ export default function DashboardScreen() {
             isAnimated
             xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 11 }}
             yAxisTextStyle={{ color: Colors[colorScheme].text }}
+            formatYLabel={formatYAxisLabel}
           />
         </View>
       </View>

@@ -17,6 +17,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { useWalletStore } from '@/store/useWalletStore';
 import { theme } from '@/theme';
 import type { Budget } from '@/types';
+import { formatYAxisLabel } from '@/utils/chartFormat';
 import { expensesToCsv } from '@/utils/csvExport';
 import { formatCurrency } from '@/utils/currency';
 import { currentMonth, today } from '@/utils/date';
@@ -27,15 +28,22 @@ import {
   groupExpensesByWallet,
   groupExpensesByWeek,
   topWalletByWeek,
+  truncateLabel,
 } from '@/utils/reports';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type ReportView = 'daily' | 'weekly' | 'monthly';
+type DistributionSort = 'amount' | 'name';
 
 const REPORT_VIEW_OPTIONS: ChipOption<ReportView>[] = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
+];
+
+const DISTRIBUTION_SORT_OPTIONS: ChipOption<DistributionSort>[] = [
+  { value: 'amount', label: 'Amount' },
+  { value: 'name', label: 'A–Z' },
 ];
 
 interface BudgetFormState {
@@ -73,6 +81,7 @@ export default function ReportsScreen() {
 
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonth());
   const [reportView, setReportView] = useState<ReportView>('monthly');
+  const [distributionSort, setDistributionSort] = useState<DistributionSort>('amount');
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(initialBudgetForm);
   const [savingBudget, setSavingBudget] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -89,6 +98,9 @@ export default function ReportsScreen() {
   const categorySlices = groupExpensesByCategory(expenses, categories, month);
   const monthTotal = categorySlices.reduce((sum, slice) => sum + slice.value, 0);
   const pieData = categorySlices.map((slice) => ({ value: slice.value, color: slice.color }));
+  const distributionRows = [...categorySlices].sort((a, b) =>
+    distributionSort === 'name' ? a.name.localeCompare(b.name) : b.value - a.value
+  );
 
   const dailyPoints = groupExpensesByDay(expenses, month);
   const weeklyPoints = groupExpensesByWeek(expenses, month);
@@ -119,6 +131,11 @@ export default function ReportsScreen() {
     color: walletColorFor(slice.walletId),
   }));
   const walletWeeklyUsage = topWalletByWeek(expenses, wallets, month);
+  const walletTrendData = walletWeeklyUsage.map((point) => ({
+    value: point.topWalletAmount,
+    label: point.label,
+  }));
+  const hasWalletTrendData = walletWeeklyUsage.some((point) => point.topWalletAmount > 0);
 
   const budgetRows = budgetVsActual(budgets, expenses, categories, month);
   const budgetedCategoryIds = new Set(budgetRows.map((row) => row.budget.categoryId));
@@ -227,27 +244,65 @@ export default function ReportsScreen() {
         <Text style={styles.sectionTitle}>Spending by Category</Text>
         {categorySlices.length > 0 ? (
           <>
-            <View style={styles.pieRow}>
+            <View style={styles.pieSideBySideRow}>
               <PieChart
                 data={pieData}
                 donut
-                radius={90}
-                innerRadius={55}
+                radius={60}
+                innerRadius={36}
                 centerLabelComponent={() => (
-                  <Text style={styles.pieCenterLabel}>{formatCurrency(monthTotal, currency)}</Text>
+                  <Text style={styles.pieCenterLabelSmall}>
+                    {formatCurrency(monthTotal, currency)}
+                  </Text>
                 )}
               />
+              <View style={styles.legendColumn}>
+                {categorySlices.map((slice) => (
+                  <View key={slice.categoryId} style={styles.legendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                    <Text style={styles.legendText} numberOfLines={1}>
+                      {truncateLabel(slice.name)} · {formatCurrency(slice.value, currency)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
-            <View style={styles.legend}>
-              {categorySlices.map((slice) => (
-                <View key={slice.categoryId} style={styles.legendRow}>
+
+            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>
+              Expense Distribution
+            </Text>
+            <ChipPicker
+              options={DISTRIBUTION_SORT_OPTIONS}
+              selectedValue={distributionSort}
+              onSelect={setDistributionSort}
+            />
+            <View style={styles.distributionHeaderRow}>
+              <Text style={[styles.distributionHeaderText, styles.distributionCategoryCol]}>
+                Category
+              </Text>
+              <Text style={[styles.distributionHeaderText, styles.distributionAmountCol]}>
+                Amount
+              </Text>
+              <Text style={[styles.distributionHeaderText, styles.distributionPercentCol]}>
+                % of total
+              </Text>
+            </View>
+            {distributionRows.map((slice) => (
+              <View key={slice.categoryId} style={styles.distributionRow}>
+                <View style={[styles.distributionCategoryCol, styles.distributionCategoryCell]}>
                   <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                  <Text style={styles.legendText}>
-                    {slice.name} · {formatCurrency(slice.value, currency)}
+                  <Text style={styles.distributionText} numberOfLines={1}>
+                    {slice.name}
                   </Text>
                 </View>
-              ))}
-            </View>
+                <Text style={[styles.distributionText, styles.distributionAmountCol]}>
+                  {formatCurrency(slice.value, currency)}
+                </Text>
+                <Text style={[styles.distributionText, styles.distributionPercentCol]}>
+                  {monthTotal > 0 ? Math.round((slice.value / monthTotal) * 100) : 0}%
+                </Text>
+              </View>
+            ))}
           </>
         ) : (
           <Text style={styles.emptyText}>No expenses this month yet.</Text>
@@ -258,36 +313,57 @@ export default function ReportsScreen() {
         <Text style={styles.sectionTitle}>Payment Methods</Text>
         {walletSlices.length > 0 ? (
           <>
-            <View style={styles.pieRow}>
+            <View style={styles.pieSideBySideRow}>
               <PieChart
                 data={walletPieData}
                 donut
-                radius={90}
-                innerRadius={55}
+                radius={60}
+                innerRadius={36}
                 centerLabelComponent={() => (
-                  <Text style={styles.pieCenterLabel}>
+                  <Text style={styles.pieCenterLabelSmall}>
                     {formatCurrency(walletMonthTotal, currency)}
                   </Text>
                 )}
               />
+              <View style={styles.legendColumn}>
+                {walletSlices.map((slice) => (
+                  <View key={slice.walletId ?? 'unassigned'} style={styles.legendRow}>
+                    <View
+                      style={[
+                        styles.legendDot,
+                        { backgroundColor: walletColorFor(slice.walletId) },
+                      ]}
+                    />
+                    <Text style={styles.legendText} numberOfLines={1}>
+                      {truncateLabel(slice.name)} ·{' '}
+                      {walletMonthTotal > 0
+                        ? Math.round((slice.value / walletMonthTotal) * 100)
+                        : 0}
+                      %
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
-            <View style={styles.legend}>
-              {walletSlices.map((slice) => (
-                <View key={slice.walletId ?? 'unassigned'} style={styles.legendRow}>
-                  <View
-                    style={[
-                      styles.legendDot,
-                      { backgroundColor: walletColorFor(slice.walletId) },
-                    ]}
-                  />
-                  <Text style={styles.legendText}>
-                    {slice.name} ·{' '}
-                    {walletMonthTotal > 0 ? Math.round((slice.value / walletMonthTotal) * 100) : 0}%
-                    · {formatCurrency(slice.value, currency)}
-                  </Text>
-                </View>
-              ))}
-            </View>
+
+            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Payment Trend</Text>
+            {hasWalletTrendData ? (
+              <View style={styles.chartRow}>
+                <LineChart
+                  data={walletTrendData}
+                  thickness={2}
+                  color={Colors[colorScheme].primary}
+                  noOfSections={4}
+                  height={140}
+                  isAnimated
+                  xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
+                  yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                  formatYLabel={formatYAxisLabel}
+                />
+              </View>
+            ) : (
+              <Text style={styles.emptyText}>No wallet usage this month yet.</Text>
+            )}
 
             <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>
               Most-used wallet by week
@@ -326,6 +402,7 @@ export default function ReportsScreen() {
                 isAnimated
                 xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 10 }}
                 yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                formatYLabel={formatYAxisLabel}
               />
             )}
             {reportView === 'daily' && (
@@ -338,6 +415,7 @@ export default function ReportsScreen() {
                 isAnimated
                 xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
                 yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                formatYLabel={formatYAxisLabel}
               />
             )}
             {reportView === 'weekly' && (
@@ -350,6 +428,7 @@ export default function ReportsScreen() {
                 isAnimated
                 xAxisLabelTextStyle={{ color: Colors[colorScheme].text, fontSize: 9 }}
                 yAxisTextStyle={{ color: Colors[colorScheme].text }}
+                formatYLabel={formatYAxisLabel}
               />
             )}
           </View>
@@ -506,16 +585,18 @@ const styles = StyleSheet.create({
   emptyText: {
     opacity: 0.7,
   },
-  pieRow: {
+  pieSideBySideRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
     marginTop: 8,
   },
-  pieCenterLabel: {
-    fontSize: 14,
+  pieCenterLabelSmall: {
+    fontSize: 11,
     fontWeight: '700',
   },
-  legend: {
-    marginTop: 12,
+  legendColumn: {
+    flex: 1,
     gap: 6,
   },
   legendRow: {
@@ -529,6 +610,41 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   legendText: {
+    flex: 1,
+    fontSize: 13,
+  },
+  distributionHeaderRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  distributionHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    opacity: 0.6,
+    textTransform: 'uppercase',
+  },
+  distributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  distributionCategoryCol: {
+    flex: 2,
+  },
+  distributionCategoryCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  distributionAmountCol: {
+    flex: 1.2,
+    textAlign: 'right',
+  },
+  distributionPercentCol: {
+    flex: 0.8,
+    textAlign: 'right',
+  },
+  distributionText: {
     fontSize: 13,
   },
   weeklyUsageText: {
