@@ -1,4 +1,3 @@
-import { useSettingsStore } from '@/store/useSettingsStore';
 import { useWalletStore } from '@/store/useWalletStore';
 
 /**
@@ -8,14 +7,12 @@ import { useWalletStore } from '@/store/useWalletStore';
  * otherwise go stale — refetch it after any such mutation rather than trying
  * to mirror the balance math here too.
  *
- * Lives standalone (not inside useExpenseStore) so neither store needs to
- * import the other: useSettingsStore already imports useExpenseStore for
- * resetAllData, and useExpenseStore importing useSettingsStore back (for
- * this helper) used to create a require cycle between the two.
+ * Takes `userId` as a parameter (callers already have it from the row they
+ * just mutated) rather than reading it from useSettingsStore — depending on
+ * useSettingsStore here would recreate the exact require cycle this file was
+ * extracted to avoid, since useSettingsStore imports useExpenseStore back for
+ * resetAllData. This file only ever depends on useWalletStore.
  */
-export async function refreshWallets(): Promise<void> {
-  const userId = useSettingsStore.getState().account?.id;
-  if (userId) {
-    await useWalletStore.getState().load(userId);
-  }
+export async function refreshWallets(userId: string): Promise<void> {
+  await useWalletStore.getState().load(userId);
 }

@@ -35,18 +35,21 @@ export const useExpenseStore = create<ExpenseState>((set, get) => ({
   addExpense: async (input: NewExpenseInput) => {
     const expense = await insertExpense(input);
     set({ expenses: [expense, ...get().expenses] });
-    await refreshWallets();
+    await refreshWallets(expense.userId);
     return expense;
   },
   editExpense: async (id: string, input: UpdateExpenseInput) => {
     const expense = await updateExpense(id, input);
     set({ expenses: get().expenses.map((existing) => (existing.id === id ? expense : existing)) });
-    await refreshWallets();
+    await refreshWallets(expense.userId);
     return expense;
   },
   removeExpense: async (id: string) => {
+    const userId = get().expenses.find((existing) => existing.id === id)?.userId;
     await deleteExpense(id);
     set({ expenses: get().expenses.filter((existing) => existing.id !== id) });
-    await refreshWallets();
+    if (userId) {
+      await refreshWallets(userId);
+    }
   },
 }));

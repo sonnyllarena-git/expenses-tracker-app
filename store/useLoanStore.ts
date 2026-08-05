@@ -12,7 +12,6 @@ import {
 } from '@/db/queries/loans';
 import { refreshWallets } from '@/store/refreshWallets';
 import { useExpenseStore } from '@/store/useExpenseStore';
-import { useSettingsStore } from '@/store/useSettingsStore';
 import type { Loan } from '@/types';
 
 interface LoanState {
@@ -56,10 +55,7 @@ export const useLoanStore = create<LoanState>((set, get) => ({
     const { loan } = await recordLoanPayment(input);
     set({ loans: get().loans.map((existing) => (existing.id === loan.id ? loan : existing)) });
 
-    const userId = useSettingsStore.getState().account?.id;
-    if (userId) {
-      await useExpenseStore.getState().load(userId);
-    }
-    await refreshWallets();
+    await useExpenseStore.getState().load(loan.userId);
+    await refreshWallets(loan.userId);
   },
 }));
