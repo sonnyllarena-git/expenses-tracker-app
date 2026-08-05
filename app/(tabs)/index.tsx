@@ -13,6 +13,7 @@ import { useExpenseStore } from '@/store/useExpenseStore';
 import { useIncomeStore } from '@/store/useIncomeStore';
 import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useWalletStore } from '@/store/useWalletStore';
 import { moodFromUsage, overallBudgetUsage } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
 import {
@@ -36,6 +37,7 @@ export default function DashboardScreen() {
   const templates = useRecurringStore((state) => state.templates);
   const budgets = useBudgetStore((state) => state.budgets);
   const loadBudgets = useBudgetStore((state) => state.load);
+  const netWorth = useWalletStore((state) => state.netWorth());
   const colorScheme = useColorScheme();
 
   // Picked once per screen mount, not on every render, so it doesn't reroll
@@ -131,6 +133,11 @@ export default function DashboardScreen() {
         )}
       </View>
 
+      <View style={[styles.netWorthCard, { backgroundColor: Colors[colorScheme].primary }]}>
+        <Text style={styles.netWorthLabel}>Net Worth</Text>
+        <Text style={styles.netWorthValue}>{formatCurrency(netWorth, currency)}</Text>
+      </View>
+
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
         <Text style={styles.sectionTitle}>This Month</Text>
         <View style={styles.summaryRow}>
@@ -182,6 +189,23 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  netWorthCard: {
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    gap: 4,
+  },
+  netWorthLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+    opacity: 0.85,
+  },
+  netWorthValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
   },
   card: {
     borderRadius: 12,
