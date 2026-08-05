@@ -10,6 +10,7 @@ import { useExpenseStore } from '@/store/useExpenseStore';
 import { useIncomeStore } from '@/store/useIncomeStore';
 import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useWalletStore } from '@/store/useWalletStore';
 
 function StatusScreen({ title, message }: { title?: string; message?: string }) {
   return (
@@ -64,8 +65,8 @@ function MigrationGate({ children }: PropsWithChildren) {
  * Loads the single local account, then its categories (seeding the 7 defaults
  * on first launch), materializes any due recurring expenses, then loads
  * expenses (picking up both prior and newly-materialized rows in one load),
- * then the recurring templates themselves, then income. Runs once migrations
- * have succeeded.
+ * then the recurring templates themselves, then income, then wallets. Runs
+ * once migrations have succeeded.
  */
 function BootstrapGate({ children }: PropsWithChildren) {
   const [ready, setReady] = useState(false);
@@ -80,6 +81,7 @@ function BootstrapGate({ children }: PropsWithChildren) {
         await useExpenseStore.getState().load(account.id);
         await useRecurringStore.getState().load(account.id);
         await useIncomeStore.getState().load(account.id);
+        await useWalletStore.getState().load(account.id);
         setReady(true);
       } catch (err) {
         setBootstrapError(err instanceof Error ? err : new Error(String(err)));
