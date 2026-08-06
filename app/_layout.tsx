@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { GlobalChat } from '@/components/GlobalChat';
 import { useColorScheme } from '@/components/useColorScheme';
 import { DatabaseProvider } from '@/db/DatabaseProvider';
 
@@ -51,6 +52,7 @@ function RootLayoutNav() {
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
+        <GlobalChat />
       </DatabaseProvider>
     </ThemeProvider>
   );

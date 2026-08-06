@@ -1,10 +1,20 @@
 import type { Category } from '@/types';
 
-export interface ParsedSuggestedAction {
+export interface ParsedExpenseAction {
+  kind: 'expense';
   amountText: string;
   categoryName: string;
   description: string;
 }
+
+export interface ParsedBudgetAction {
+  kind: 'budget';
+  amountText: string;
+  categoryName: string;
+  alertThresholdText: string;
+}
+
+export type ParsedSuggestedAction = ParsedExpenseAction | ParsedBudgetAction;
 
 export interface ParsedAssistantMessage {
   /** Message text with the [SUGGEST_ACTION] block stripped out, for display. */
@@ -12,30 +22,69 @@ export interface ParsedAssistantMessage {
   action: ParsedSuggestedAction | null;
 }
 
-const SUGGEST_ACTION_PATTERN =
+const BUDGET_ACTION_PATTERN =
+  /\[SUGGEST_ACTION\]\s*budget:\s*₱?\s*([\d,]+(?:\.\d+)?)\s*category:\s*(.*?)\s*alertThreshold:\s*(\d+(?:\.\d+)?)\s*\[\/SUGGEST_ACTION\]/is;
+const EXPENSE_ACTION_PATTERN =
   /\[SUGGEST_ACTION\]\s*expense:\s*₱?\s*([\d,]+(?:\.\d+)?)\s*category:\s*(.*?)\s*description:\s*(.*?)\s*\[\/SUGGEST_ACTION\]/is;
 
-/** Extracts a [SUGGEST_ACTION] block (per the system prompt's format) from an assistant reply. */
+/**
+ * Extracts a [SUGGEST_ACTION] block (per the system prompt's format) from an
+ * assistant reply. Checked in this order because both patterns can appear in
+ * a "budget:" message's category text loosely — budget is the more specific
+ * tag name, so it's tried first.
+ */
 export function parseAssistantMessage(content: string): ParsedAssistantMessage {
-  const match = content.match(SUGGEST_ACTION_PATTERN);
-  if (!match) {
-    return { displayText: content.trim(), action: null };
+  const budgetMatch = content.match(BUDGET_ACTION_PATTERN);
+  if (budgetMatch) {
+    const [fullMatch, amountText, categoryName, alertThresholdText] = budgetMatch;
+    return {
+      displayText: content.replace(fullMatch, '').trim(),
+      action: {
+        kind: 'budget',
+        amountText,
+        categoryName: categoryName.trim(),
+        alertThresholdText,
+      },
+    };
   }
 
-  const [fullMatch, amountText, categoryName, description] = match;
-  return {
-    displayText: content.replace(fullMatch, '').trim(),
-    action: { amountText, categoryName: categoryName.trim(), description: description.trim() },
-  };
+  const expenseMatch = content.match(EXPENSE_ACTION_PATTERN);
+  if (expenseMatch) {
+    const [fullMatch, amountText, categoryName, description] = expenseMatch;
+    return {
+      displayText: content.replace(fullMatch, '').trim(),
+      action: {
+        kind: 'expense',
+        amountText,
+        categoryName: categoryName.trim(),
+        description: description.trim(),
+      },
+    };
+  }
+
+  return { displayText: content.trim(), action: null };
 }
 
-export interface ValidSuggestedAction {
+export interface ValidExpenseAction {
   valid: true;
+  kind: 'expense';
   amount: number;
   categoryId: string;
   categoryName: string;
   description: string;
 }
+
+export interface ValidBudgetAction {
+  valid: true;
+  kind: 'budget';
+  amount: number;
+  categoryId: string;
+  categoryName: string;
+  /** Fraction 0-1, matching the `budgets.alertThreshold` column (e.g. 80% -> 0.8). */
+  alertThreshold: number;
+}
+
+export type ValidSuggestedAction = ValidExpenseAction | ValidBudgetAction;
 
 export interface InvalidSuggestedAction {
   valid: false;
@@ -43,6 +92,8 @@ export interface InvalidSuggestedAction {
 }
 
 export type ValidatedSuggestedAction = ValidSuggestedAction | InvalidSuggestedAction;
+
+const DEFAULT_ALERT_THRESHOLD = 0.8;
 
 /**
  * Never guesses: an amount that isn't a positive number, or a category that
@@ -65,8 +116,22 @@ export function validateSuggestedAction(
     return { valid: false, error: `Category "${action.categoryName}" doesn't exist.` };
   }
 
+  if (action.kind === 'budget') {
+    const pct = Number(action.alertThresholdText);
+    const alertThreshold = pct > 0 && pct <= 100 ? pct / 100 : DEFAULT_ALERT_THRESHOLD;
+    return {
+      valid: true,
+      kind: 'budget',
+      amount,
+      categoryId: category.id,
+      categoryName: category.name,
+      alertThreshold,
+    };
+  }
+
   return {
     valid: true,
+    kind: 'expense',
     amount,
     categoryId: category.id,
     categoryName: category.name,

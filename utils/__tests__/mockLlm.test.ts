@@ -178,4 +178,36 @@ describe('generateMockResponse', () => {
     expect(response).toContain('Food');
     expect(response).toContain('Transport');
   });
+
+  it('emits a budget (not expense) [SUGGEST_ACTION] when "budget" appears in an add request', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add ₱5000 budget Food', context);
+    expect(response).not.toContain('expense:');
+    expect(response).toContain(
+      '[SUGGEST_ACTION] budget:₱5000 category:Food alertThreshold:80 [/SUGGEST_ACTION]'
+    );
+  });
+
+  it('routes a differently-worded budget request the same way, matching the acceptance test', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 3000 budget to food', context);
+    expect(response).toContain(
+      '[SUGGEST_ACTION] budget:₱3000 category:Food alertThreshold:80 [/SUGGEST_ACTION]'
+    );
+  });
+
+  it('reads an explicit alert percentage out of the message', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 3000 budget to food, alert at 90%', context);
+    expect(response).toContain(
+      '[SUGGEST_ACTION] budget:₱3000 category:Food alertThreshold:90 [/SUGGEST_ACTION]'
+    );
+  });
+
+  it('asks a clarifying question for a budget instead of guessing the category', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('set a ₱2000 budget', context);
+    expect(response).not.toContain('[SUGGEST_ACTION]');
+    expect(response).toContain('Which category should it apply to?');
+  });
 });

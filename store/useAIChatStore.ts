@@ -6,10 +6,11 @@ import {
   listChatMessages,
   updateChatMessageActionStatus,
 } from '@/db/queries/chatMessages';
+import { useBudgetStore } from '@/store/useBudgetStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import type { ChatMessage, SuggestedActionStatus } from '@/types';
 import type { ChatContextData } from '@/utils/aiContext';
-import { today } from '@/utils/date';
+import { currentMonth, today } from '@/utils/date';
 import { generateMockResponse } from '@/utils/mockLlm';
 import { withTimeout } from '@/utils/withTimeout';
 
@@ -71,7 +72,8 @@ interface SendMessageInput {
   historyEnabled: boolean;
 }
 
-interface ConfirmActionInput {
+interface ConfirmExpenseInput {
+  kind: 'expense';
   userId: string;
   messageId: string;
   amount: number;
@@ -79,6 +81,18 @@ interface ConfirmActionInput {
   description: string;
   historyEnabled: boolean;
 }
+
+interface ConfirmBudgetInput {
+  kind: 'budget';
+  userId: string;
+  messageId: string;
+  amount: number;
+  categoryId: string;
+  alertThreshold: number;
+  historyEnabled: boolean;
+}
+
+type ConfirmActionInput = ConfirmExpenseInput | ConfirmBudgetInput;
 
 interface CancelActionInput {
   messageId: string;
@@ -88,18 +102,26 @@ interface CancelActionInput {
 interface AIChatState {
   messages: ChatMessage[];
   isLoading: boolean;
+  /** Whether the floating chat bubble modal is currently on screen. */
+  isChatOpen: boolean;
+  /** True once an assistant reply has arrived while the modal was closed. */
+  hasUnread: boolean;
   /** Loads persisted history for the account; a no-op if history was never enabled. */
   load: (userId: string) => Promise<void>;
   sendMessage: (input: SendMessageInput) => Promise<void>;
-  /** Creates the real expense from an already-validated suggestion, then marks it confirmed. */
+  /** Creates the real expense/budget from an already-validated suggestion, then marks it confirmed. */
   confirmAction: (input: ConfirmActionInput) => Promise<void>;
   cancelAction: (input: CancelActionInput) => Promise<void>;
   clearHistory: (userId: string) => Promise<void>;
+  openChat: () => void;
+  closeChat: () => void;
 }
 
 export const useAIChatStore = create<AIChatState>((set, get) => ({
   messages: [],
   isLoading: false,
+  isChatOpen: false,
+  hasUnread: false,
   load: async (userId: string) => {
     const messages = await listChatMessages(userId);
     set({ messages });
@@ -125,16 +147,43 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
       actionStatus,
       historyEnabled
     );
-    set({ messages: [...get().messages, assistantMessage], isLoading: false });
-  },
-  confirmAction: async ({ userId, messageId, amount, categoryId, description, historyEnabled }) => {
-    await useExpenseStore.getState().addExpense({
-      userId,
-      amount,
-      categoryId,
-      date: today(),
-      description,
+    set({
+      messages: [...get().messages, assistantMessage],
+      isLoading: false,
+      hasUnread: !get().isChatOpen,
     });
+  },
+  confirmAction: async (input) => {
+    const { userId, messageId, amount, categoryId, historyEnabled } = input;
+
+    if (input.kind === 'budget') {
+      const month = currentMonth();
+      const existing = useBudgetStore
+        .getState()
+        .budgets.find((b) => b.categoryId === categoryId && b.month === month);
+      if (existing) {
+        await useBudgetStore.getState().editBudget(existing.id, {
+          limitAmount: amount,
+          alertThreshold: input.alertThreshold,
+        });
+      } else {
+        await useBudgetStore.getState().addBudget({
+          userId,
+          categoryId,
+          limitAmount: amount,
+          month,
+          alertThreshold: input.alertThreshold,
+        });
+      }
+    } else {
+      await useExpenseStore.getState().addExpense({
+        userId,
+        amount,
+        categoryId,
+        date: today(),
+        description: input.description,
+      });
+    }
 
     set({
       messages: get().messages.map((message) =>
@@ -161,4 +210,6 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
     await deleteAllChatMessages(userId);
     set({ messages: [] });
   },
+  openChat: () => set({ isChatOpen: true, hasUnread: false }),
+  closeChat: () => set({ isChatOpen: false }),
 }));

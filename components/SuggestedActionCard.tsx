@@ -4,15 +4,19 @@ import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import type { Category, SuggestedActionStatus } from '@/types';
-import { formatCurrency } from '@/utils/currency';
 import { validateSuggestedAction, type ParsedSuggestedAction } from '@/utils/suggestedAction';
+import { formatCurrency } from '@/utils/currency';
+
+export type ResolvedSuggestedAction =
+  | { kind: 'expense'; amount: number; categoryId: string; description: string }
+  | { kind: 'budget'; amount: number; categoryId: string; alertThreshold: number };
 
 interface SuggestedActionCardProps {
   action: ParsedSuggestedAction;
   status: SuggestedActionStatus;
   categories: Category[];
   currency: string;
-  onConfirm: (resolved: { amount: number; categoryId: string; description: string }) => void;
+  onConfirm: (resolved: ResolvedSuggestedAction) => void;
   onCancel: () => void;
 }
 
@@ -43,11 +47,15 @@ export function SuggestedActionCard({
     );
   }
 
+  const isBudget = validated.kind === 'budget';
+
   if (status === 'confirmed') {
     return (
       <View style={[styles.card, { borderColor: Colors[colorScheme].success }]}>
         <Text style={[styles.confirmedText, { color: Colors[colorScheme].success }]}>
-          {`✓ Added ${formatCurrency(validated.amount, currency)} ${validated.categoryName} expense`}
+          {isBudget
+            ? `✓ Set ${formatCurrency(validated.amount, currency)}/month ${validated.categoryName} budget`
+            : `✓ Added ${formatCurrency(validated.amount, currency)} ${validated.categoryName} expense`}
         </Text>
       </View>
     );
@@ -63,19 +71,43 @@ export function SuggestedActionCard({
 
   return (
     <View style={[styles.card, { borderColor: Colors[colorScheme].border }]}>
-      <Text style={styles.prompt}>Would you like to add this?</Text>
-      <Text style={styles.amount}>
-        {formatCurrency(validated.amount, currency)} {validated.description}
+      <Text style={styles.prompt}>
+        {isBudget ? 'Would you like to set this budget?' : 'Would you like to add this?'}
       </Text>
-      <Text style={styles.category}>Category: {validated.categoryName}</Text>
+      {isBudget ? (
+        <>
+          <Text style={styles.amount}>{formatCurrency(validated.amount, currency)}/month</Text>
+          <Text style={styles.category}>Category: {validated.categoryName}</Text>
+          <Text style={styles.category}>
+            Alert at {Math.round(validated.alertThreshold * 100)}% spent
+          </Text>
+        </>
+      ) : (
+        <>
+          <Text style={styles.amount}>
+            {formatCurrency(validated.amount, currency)} {validated.description}
+          </Text>
+          <Text style={styles.category}>Category: {validated.categoryName}</Text>
+        </>
+      )}
       <View style={styles.buttonRow}>
         <Pressable
           onPress={() =>
-            onConfirm({
-              amount: validated.amount,
-              categoryId: validated.categoryId,
-              description: validated.description,
-            })
+            onConfirm(
+              isBudget
+                ? {
+                    kind: 'budget',
+                    amount: validated.amount,
+                    categoryId: validated.categoryId,
+                    alertThreshold: validated.alertThreshold,
+                  }
+                : {
+                    kind: 'expense',
+                    amount: validated.amount,
+                    categoryId: validated.categoryId,
+                    description: validated.description,
+                  }
+            )
           }
           style={[styles.button, { backgroundColor: Colors[colorScheme].primary }]}
         >

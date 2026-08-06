@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View as RNView } from 'react-native';
 
@@ -20,7 +19,6 @@ export default function SettingsScreen() {
   const updateAccount = useSettingsStore((state) => state.updateAccount);
   const resetAllData = useSettingsStore((state) => state.resetAllData);
   const colorScheme = useColorScheme();
-  const router = useRouter();
   const [resetting, setResetting] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
 
@@ -102,7 +100,7 @@ export default function SettingsScreen() {
       <Text style={styles.title}>Settings</Text>
 
       <Pressable
-        onPress={() => router.push('/ai-chat')}
+        onPress={() => useAIChatStore.getState().openChat()}
         style={[styles.aiCard, { backgroundColor: Colors[colorScheme].primary }]}
       >
         <Ionicons name="sparkles" size={22} color="#fff" />

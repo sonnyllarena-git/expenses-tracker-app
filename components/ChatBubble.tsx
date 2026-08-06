@@ -1,6 +1,10 @@
 import { StyleSheet } from 'react-native';
 
-import { SuggestedActionCard } from '@/components/SuggestedActionCard';
+import { AvatarMood } from '@/components/AvatarMood';
+import {
+  SuggestedActionCard,
+  type ResolvedSuggestedAction,
+} from '@/components/SuggestedActionCard';
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -11,7 +15,7 @@ interface ChatBubbleProps {
   message: ChatMessage;
   categories: Category[];
   currency: string;
-  onConfirm: (resolved: { amount: number; categoryId: string; description: string }) => void;
+  onConfirm: (resolved: ResolvedSuggestedAction) => void;
   onCancel: () => void;
 }
 
@@ -34,32 +38,39 @@ export function ChatBubble({
 
   return (
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAssistant]}>
-      <View
-        style={[
-          styles.bubble,
-          isUser
-            ? { backgroundColor: Colors[colorScheme].primary }
-            : { backgroundColor: Colors[colorScheme].card },
-        ]}
-      >
-        <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
-          {parsed.displayText}
-        </Text>
-        <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
-          {formatTime(message.createdAt)}
-        </Text>
-      </View>
-
-      {!isUser && parsed.action && message.actionStatus && (
-        <SuggestedActionCard
-          action={parsed.action}
-          status={message.actionStatus}
-          categories={categories}
-          currency={currency}
-          onConfirm={onConfirm}
-          onCancel={onCancel}
-        />
+      {!isUser && (
+        <View style={styles.avatarWrap}>
+          <AvatarMood mood="neutral" size={32} />
+        </View>
       )}
+      <View style={styles.column}>
+        <View
+          style={[
+            styles.bubble,
+            isUser
+              ? { backgroundColor: Colors[colorScheme].primary }
+              : { backgroundColor: Colors[colorScheme].card },
+          ]}
+        >
+          <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
+            {parsed.displayText}
+          </Text>
+          <Text style={[styles.timestamp, isUser && styles.timestampUser]}>
+            {formatTime(message.createdAt)}
+          </Text>
+        </View>
+
+        {!isUser && parsed.action && message.actionStatus && (
+          <SuggestedActionCard
+            action={parsed.action}
+            status={message.actionStatus}
+            categories={categories}
+            currency={currency}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -68,12 +79,21 @@ const styles = StyleSheet.create({
   row: {
     marginVertical: 6,
     maxWidth: '85%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
   },
   rowUser: {
     alignSelf: 'flex-end',
   },
   rowAssistant: {
     alignSelf: 'flex-start',
+  },
+  avatarWrap: {
+    marginBottom: 2,
+  },
+  column: {
+    flexShrink: 1,
   },
   bubble: {
     borderRadius: 16,

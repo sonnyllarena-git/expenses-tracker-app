@@ -18,8 +18,12 @@ import type { Category } from '@/types';
  * `contextText` / buildFullPrompt.
  */
 const ADD_INTENT_PATTERN = /\b(add|log|record|track)\b/i;
+const BUDGET_INTENT_PATTERN = /\b(add|log|record|track|set|create)\b/i;
+const BUDGET_KEYWORD_PATTERN = /\bbudget/i;
 const AMOUNT_PATTERN = /(?:₱|php)?\s*(\d[\d,]*(?:\.\d+)?)/i;
 const FOR_DESCRIPTION_PATTERN = /\bfor\s+([a-z][\w\s]{0,30})/i;
+const ALERT_THRESHOLD_PATTERN = /\balert\w*\s*(?:at|of|threshold\s*(?:at|of)?)?\s*(\d{1,3})\s*%/i;
+const DEFAULT_ALERT_THRESHOLD_PCT = 80;
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   Food: [
@@ -76,6 +80,47 @@ function extractDescription(message: string, category: Category): string {
     return captured.charAt(0).toUpperCase() + captured.slice(1);
   }
   return `${category.name} expense`;
+}
+
+function extractAlertThreshold(message: string): number {
+  const match = message.match(ALERT_THRESHOLD_PATTERN);
+  if (!match) {
+    return DEFAULT_ALERT_THRESHOLD_PCT;
+  }
+  const pct = Number(match[1]);
+  return pct > 0 && pct <= 100 ? pct : DEFAULT_ALERT_THRESHOLD_PCT;
+}
+
+/**
+ * Checked before `tryBuildSuggestedAction` so a message like "add 3000 budget
+ * to food" — which also matches the expense ADD_INTENT_PATTERN — is routed to
+ * a budget suggestion instead of an expense one. The word "budget" is what
+ * disambiguates intent here, matching the same word the real system prompt
+ * (see aiContext.ts's buildSystemPrompt) tells the model to key off of.
+ */
+function tryBuildBudgetSuggestedAction(message: string, context: ChatContextData): string | null {
+  if (!BUDGET_KEYWORD_PATTERN.test(message) || !BUDGET_INTENT_PATTERN.test(message)) {
+    return null;
+  }
+  const amount = extractAmount(message);
+  if (amount === null) {
+    return null;
+  }
+
+  const category = findCategoryByKeyword(message, context.categories);
+  if (!category) {
+    const names = context.categories.map((c) => c.name).join(', ');
+    return (
+      `Sure — I can set a ${formatCurrency(amount, context.currency)} budget. ` +
+      `Which category should it apply to? (${names})`
+    );
+  }
+
+  const alertThreshold = extractAlertThreshold(message);
+  return (
+    `Got it! Here's the budget I'll set:\n\n` +
+    `[SUGGEST_ACTION] budget:₱${amount} category:${category.name} alertThreshold:${alertThreshold} [/SUGGEST_ACTION]`
+  );
 }
 
 function tryBuildSuggestedAction(message: string, context: ChatContextData): string | null {
@@ -181,6 +226,11 @@ function totalAnswer(context: ChatContextData): string {
 
 /** Pattern-matches keywords in `message` and returns a templated, context-aware reply. */
 export function generateMockResponse(message: string, context: ChatContextData): string {
+  const budgetAction = tryBuildBudgetSuggestedAction(message, context);
+  if (budgetAction) {
+    return budgetAction;
+  }
+
   const suggestedAction = tryBuildSuggestedAction(message, context);
   if (suggestedAction) {
     return suggestedAction;

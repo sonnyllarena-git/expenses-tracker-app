@@ -5,6 +5,8 @@ import { StyleSheet } from 'react-native';
 import { db, initDb } from './client';
 import migrations from './migrations/migrations';
 import { Text, View } from '@/components/Themed';
+import { useAIChatStore } from '@/store/useAIChatStore';
+import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useIncomeStore } from '@/store/useIncomeStore';
@@ -67,7 +69,10 @@ function MigrationGate({ children }: PropsWithChildren) {
  * set on first launch), materializes any due recurring expenses, then loads
  * expenses (picking up both prior and newly-materialized rows in one load),
  * then the recurring templates themselves, then income, then wallets, then
- * loans. Runs once migrations have succeeded.
+ * loans, then budgets — budgets are loaded here (not just lazily by the
+ * Dashboard/Reports screens) so the global AI chat has full context
+ * regardless of which tab the user has visited. Runs once migrations have
+ * succeeded.
  */
 function BootstrapGate({ children }: PropsWithChildren) {
   const [ready, setReady] = useState(false);
@@ -84,6 +89,8 @@ function BootstrapGate({ children }: PropsWithChildren) {
         await useIncomeStore.getState().load(account.id);
         await useWalletStore.getState().load(account.id);
         await useLoanStore.getState().load(account.id);
+        await useBudgetStore.getState().load(account.id);
+        await useAIChatStore.getState().load(account.id);
         setReady(true);
       } catch (err) {
         setBootstrapError(err instanceof Error ? err : new Error(String(err)));

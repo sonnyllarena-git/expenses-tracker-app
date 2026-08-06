@@ -84,6 +84,18 @@ export default function WalletScreen() {
     );
   }
 
+  async function mergeIntoExisting(existingWallet: Wallet, addAmount: number) {
+    setSaving(true);
+    try {
+      await editWallet(existingWallet.id, { balance: existingWallet.balance + addAmount });
+      resetForm();
+    } catch (err) {
+      Alert.alert('Failed to save wallet', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function submitForm() {
     const balance = Number(form.balanceText);
     if (!Number.isFinite(balance)) {
@@ -101,6 +113,22 @@ export default function WalletScreen() {
     if (!account) {
       Alert.alert('Not ready', 'The app is still starting up — try again in a moment.');
       return;
+    }
+
+    if (!form.editingId) {
+      const existingWallet = wallets.find((w) => w.type === form.type);
+      if (existingWallet) {
+        const newTotal = existingWallet.balance + balance;
+        Alert.alert(
+          `${existingWallet.name} already exists`,
+          `${formatCurrency(existingWallet.balance, currency)} currently. Add ${formatCurrency(balance, currency)} to it? New total: ${formatCurrency(newTotal, currency)}`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Confirm', onPress: () => mergeIntoExisting(existingWallet, balance) },
+          ]
+        );
+        return;
+      }
     }
 
     setSaving(true);

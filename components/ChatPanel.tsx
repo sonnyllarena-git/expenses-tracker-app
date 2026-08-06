@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
 import {
   ActivityIndicator,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 
 import { ChatBubble } from '@/components/ChatBubble';
+import type { ResolvedSuggestedAction } from '@/components/SuggestedActionCard';
 import { Text, View } from '@/components/Themed';
 import { Toast } from '@/components/Toast';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -31,6 +31,11 @@ import { currentMonth } from '@/utils/date';
 import { downloadModel, isModelDownloaded } from '@/utils/modelDownload';
 
 type DownloadStatus = 'ready' | 'downloading' | 'failed';
+
+interface ChatPanelProps {
+  /** Renders a header with a close button when set — used by the bubble modal. Omit for a full-screen host that provides its own header (e.g. a Stack.Screen title). */
+  onClose?: () => void;
+}
 
 /**
  * Gates the chat on the (simulated — see utils/modelDownload.ts) model
@@ -115,7 +120,7 @@ function ThinkingIndicator() {
   );
 }
 
-export default function AIChatScreen() {
+export function ChatPanel({ onClose }: ChatPanelProps) {
   const colorScheme = useColorScheme();
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [inputText, setInputText] = useState('');
@@ -129,12 +134,6 @@ export default function AIChatScreen() {
   const budgets = useBudgetStore((state) => state.budgets);
   const wallets = useWalletStore((state) => state.wallets);
   const loans = useLoanStore((state) => state.loans);
-
-  useEffect(() => {
-    if (account) {
-      useAIChatStore.getState().load(account.id);
-    }
-  }, [account]);
 
   const hideToast = useCallback(() => setToastMessage(null), []);
 
@@ -160,10 +159,7 @@ export default function AIChatScreen() {
     });
   }
 
-  async function handleConfirm(
-    messageId: string,
-    resolved: { amount: number; categoryId: string; description: string }
-  ) {
+  async function handleConfirm(messageId: string, resolved: ResolvedSuggestedAction) {
     if (!account) {
       return;
     }
@@ -171,15 +167,18 @@ export default function AIChatScreen() {
       await useAIChatStore.getState().confirmAction({
         userId: account.id,
         messageId,
-        ...resolved,
         historyEnabled: account.aiChatHistoryEnabled,
+        ...resolved,
       });
       const category = categories.find((c) => c.id === resolved.categoryId);
+      const categoryName = category?.name ?? '';
       setToastMessage(
-        `${formatCurrency(resolved.amount, account.currency)} ${category?.name ?? ''} expense added`
+        resolved.kind === 'budget'
+          ? `${formatCurrency(resolved.amount, account.currency)}/month ${categoryName} budget set`
+          : `${formatCurrency(resolved.amount, account.currency)} ${categoryName} expense added`
       );
     } catch (err) {
-      Alert.alert('Failed to add expense', err instanceof Error ? err.message : 'Unknown error');
+      Alert.alert('Failed to save', err instanceof Error ? err.message : 'Unknown error');
     }
   }
 
@@ -195,7 +194,14 @@ export default function AIChatScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'AI Assistant' }} />
+      {onClose && (
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>AI Assistant</Text>
+          <Pressable onPress={onClose} hitSlop={8}>
+            <Ionicons name="close" size={24} color={Colors[colorScheme].text} />
+          </Pressable>
+        </View>
+      )}
       <ModelDownloadGate>
         <Text style={styles.privacyNote}>
           Your data stays on your device. No messages leave your phone.
@@ -262,6 +268,18 @@ export default function AIChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   privacyNote: {
     fontSize: 11,
