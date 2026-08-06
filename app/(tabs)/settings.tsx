@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View as RNView } from 'react-native';
 
 import { ChipPicker } from '@/components/ChipPicker';
 import { SettingsToggleRow } from '@/components/SettingsToggleRow';
@@ -8,6 +9,7 @@ import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SUPPORTED_CURRENCIES } from '@/constants/currencies';
+import { useAIChatStore } from '@/store/useAIChatStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import type { AccountType } from '@/types';
 
@@ -18,7 +20,9 @@ export default function SettingsScreen() {
   const updateAccount = useSettingsStore((state) => state.updateAccount);
   const resetAllData = useSettingsStore((state) => state.resetAllData);
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const [resetting, setResetting] = useState(false);
+  const [clearingChat, setClearingChat] = useState(false);
 
   function handleUpdateError(err: unknown) {
     Alert.alert('Failed to save', err instanceof Error ? err.message : 'Unknown error');
@@ -62,9 +66,78 @@ export default function SettingsScreen() {
     );
   }
 
+  function handleClearChatHistory() {
+    if (!account) {
+      return;
+    }
+    Alert.alert(
+      'Clear chat history?',
+      'This permanently deletes your AI chat conversation on this device. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setClearingChat(true);
+            try {
+              await useAIChatStore.getState().clearHistory(account.id);
+              Alert.alert('Chat history cleared.');
+            } catch (err) {
+              Alert.alert(
+                'Failed to clear chat history',
+                err instanceof Error ? err.message : 'Unknown error'
+              );
+            } finally {
+              setClearingChat(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Settings</Text>
+
+      <Pressable
+        onPress={() => router.push('/ai-chat')}
+        style={[styles.aiCard, { backgroundColor: Colors[colorScheme].primary }]}
+      >
+        <Ionicons name="sparkles" size={22} color="#fff" />
+        {/* Plain RN View, not Themed's — Themed's View paints its own themed
+            background (opaque white in light mode), hiding this text against
+            the green card behind it. */}
+        <RNView style={styles.aiCardText}>
+          <Text style={styles.aiCardTitle}>AI Assistant</Text>
+          <Text style={styles.aiCardCaption}>Chat about your spending — fully on-device.</Text>
+        </RNView>
+        <Ionicons name="chevron-forward" size={20} color="#fff" />
+      </Pressable>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionLabel}>AI Chat</Text>
+        <SettingsToggleRow
+          label="AI Chat History"
+          caption="Keep your conversation saved on this device between app launches."
+          value={account?.aiChatHistoryEnabled ?? true}
+          onValueChange={(v) => updateAccount({ aiChatHistoryEnabled: v }).catch(handleUpdateError)}
+        />
+        <Pressable
+          onPress={handleClearChatHistory}
+          disabled={clearingChat}
+          style={[
+            styles.dangerButton,
+            { borderColor: Colors[colorScheme].warning },
+            clearingChat && styles.disabled,
+          ]}
+        >
+          <Text style={[styles.dangerButtonText, { color: Colors[colorScheme].warning }]}>
+            {clearingChat ? 'Clearing…' : 'Clear Chat History'}
+          </Text>
+        </Pressable>
+      </View>
 
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
         <Text style={styles.sectionLabel}>Currency</Text>
@@ -164,6 +237,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     gap: 8,
+  },
+  aiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    padding: 16,
+  },
+  aiCardText: {
+    flex: 1,
+  },
+  aiCardTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  aiCardCaption: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.85,
+    marginTop: 2,
   },
   sectionLabel: {
     fontSize: 13,
