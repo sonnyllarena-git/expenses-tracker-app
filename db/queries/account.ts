@@ -15,6 +15,7 @@ function toUserAccount(row: typeof users.$inferSelect): UserAccount {
     notificationsEnabled: row.notificationsEnabled,
     budgetAlertsEnabled: row.budgetAlertsEnabled,
     payday: row.payday,
+    aiChatHistoryEnabled: row.aiChatHistoryEnabled,
     createdAt: row.createdAt,
   };
 }
@@ -50,6 +51,7 @@ export interface UpdateAccountInput {
   notificationsEnabled?: boolean;
   budgetAlertsEnabled?: boolean;
   payday?: number;
+  aiChatHistoryEnabled?: boolean;
 }
 
 export async function updateAccount(id: string, input: UpdateAccountInput): Promise<UserAccount> {
@@ -66,6 +68,8 @@ export async function updateAccount(id: string, input: UpdateAccountInput): Prom
   if (input.budgetAlertsEnabled !== undefined)
     values.budgetAlertsEnabled = input.budgetAlertsEnabled;
   if (input.payday !== undefined) values.payday = input.payday;
+  if (input.aiChatHistoryEnabled !== undefined)
+    values.aiChatHistoryEnabled = input.aiChatHistoryEnabled;
 
   const [updated] = await db.update(users).set(values).where(eq(users.id, id)).returning();
 

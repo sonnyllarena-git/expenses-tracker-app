@@ -5,15 +5,14 @@ export type RecurringFrequency = 'daily' | 'weekly' | 'monthly';
 export type FamilyRole = 'admin' | 'editor' | 'viewer';
 
 export type WalletType =
-  | 'gcash'
-  | 'credit_card'
-  | 'cash'
-  | 'debit_card'
-  | 'online_money'
-  | 'bitcoin'
-  | 'other';
+  'gcash' | 'credit_card' | 'cash' | 'debit_card' | 'online_money' | 'bitcoin' | 'other';
 
 export type WalletTransactionType = 'debit' | 'credit';
+
+export type ChatRole = 'user' | 'assistant';
+
+/** Null when a message carries no [SUGGEST_ACTION] block. */
+export type SuggestedActionStatus = 'pending' | 'confirmed' | 'cancelled';
 
 export interface UserAccount {
   id: string;
@@ -24,6 +23,7 @@ export interface UserAccount {
   notificationsEnabled: boolean;
   budgetAlertsEnabled: boolean;
   payday: number;
+  aiChatHistoryEnabled: boolean;
   createdAt: string;
 }
 
@@ -112,6 +112,15 @@ export interface Loan {
   nextPaymentDate: string;
   notes: string;
   isActive: boolean;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  role: ChatRole;
+  content: string;
+  actionStatus: SuggestedActionStatus | null;
   createdAt: string;
 }
 

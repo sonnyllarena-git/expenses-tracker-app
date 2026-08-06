@@ -16,6 +16,9 @@ export const users = sqliteTable('users', {
   // Day of month salary/income typically lands, 1-31; clamped to the last
   // day of shorter months at read time (see utils/date.ts's daysUntilPayday).
   payday: integer('payday').notNull().default(25),
+  aiChatHistoryEnabled: integer('ai_chat_history_enabled', { mode: 'boolean' })
+    .notNull()
+    .default(true),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(current_timestamp)`),
@@ -172,6 +175,26 @@ export const loans = sqliteTable(
       .default(sql`(current_timestamp)`),
   },
   (table) => [index('idx_loans_user_active').on(table.userId, table.isActive)]
+);
+
+export const chatMessages = sqliteTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    // 'user' | 'assistant' (see types/index.ts's ChatRole).
+    role: text('role').notNull(),
+    content: text('content').notNull(),
+    // 'pending' | 'confirmed' | 'cancelled' — null when this message carries
+    // no [SUGGEST_ACTION] block. See utils/suggestedAction.ts.
+    actionStatus: text('action_status'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index('idx_chat_messages_user_created').on(table.userId, table.createdAt)]
 );
 
 export const familyMembers = sqliteTable('family_members', {
