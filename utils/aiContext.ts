@@ -1,7 +1,7 @@
 import type { Budget, Category, Expense, Loan, Wallet } from '@/types';
 import { spentForCategory } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
-import { formatMonthLabel } from '@/utils/date';
+import { formatMonthLabel, today as getToday } from '@/utils/date';
 
 export interface CategoryTotal {
   categoryId: string;
@@ -127,6 +127,12 @@ export interface ChatContextData {
   currency: string;
   /** Expense + budget + wallet + loan sections, joined — the block a real LLM would read. */
   contextText: string;
+  /** Recurring templates (rows in the expenses table with isRecurring set). */
+  recurringTemplates: Expense[];
+  /** Day of month (1-31) the user's salary/income typically lands. */
+  payday: number;
+  /** Today as YYYY-MM-DD; overridable for deterministic tests. */
+  today: string;
 }
 
 export function buildChatContext(input: {
@@ -137,8 +143,22 @@ export function buildChatContext(input: {
   loans: Loan[];
   month: string;
   currency: string;
+  recurringTemplates?: Expense[];
+  payday?: number;
+  today?: string;
 }): ChatContextData {
-  const { expenses, categories, budgets, wallets, loans, month, currency } = input;
+  const {
+    expenses,
+    categories,
+    budgets,
+    wallets,
+    loans,
+    month,
+    currency,
+    recurringTemplates = [],
+    payday = 25,
+    today = getToday(),
+  } = input;
 
   const contextText = [
     buildExpenseContext(expenses, categories, month, currency),
@@ -157,21 +177,42 @@ export function buildChatContext(input: {
     monthLabel: formatMonthLabel(month),
     currency,
     contextText,
+    recurringTemplates,
+    payday,
+    today,
   };
 }
 
 /** Frames the AI as a spending analyst scoped to this month's data. */
 export function buildSystemPrompt(monthLabel: string): string {
   return (
-    `You are a personal finance assistant. You have access to the user's expense data from ` +
-    `${monthLabel}. Analyze their spending, answer questions about categories, budgets, and ` +
-    `trends. Be conversational and friendly. If the word "budget" appears in the user's ` +
-    `request, they mean a monthly budget LIMIT for a category, not an expense — respond with ` +
-    `a structured suggestion in the format: [SUGGEST_ACTION] budget:₱[amount] category:[cat] ` +
+    `You are a personal finance assistant. You have access to the user's expense, budget, ` +
+    `wallet, loan, and recurring-bill data for ${monthLabel}. Analyze their spending, answer ` +
+    `questions about categories, budgets, and trends. Be conversational, friendly, and concise ` +
+    `(aim for under 200 characters per reply). Never guess amounts or categories — ask ` +
+    `clarifying questions instead.\n\n` +
+    `Volunteer insight from these 12 areas whenever relevant, even if the user didn't ask ` +
+    `directly:\n` +
+    `1. Budget alerts — spend vs. limit per category, flagging when over.\n` +
+    `2. Recurring bill reminders — what's due in the next 7 days.\n` +
+    `3. Wallet balances — per-wallet balance and net worth.\n` +
+    `4. Loan tracking — remaining balance and next payment.\n` +
+    `5. Spending trends — this week vs. last week, by category or overall.\n` +
+    `6. Daily/weekly summaries — yesterday's or this week's spend by category.\n` +
+    `7. Best practices — which budgeted categories are over, on track, or under, for next month.\n` +
+    `8. Category insights — top categories and categories with zero spend.\n` +
+    `9. Payday countdown — days until payday and budget used so far.\n` +
+    `10. Payment method insights — which wallet gets used most.\n` +
+    `11. Savings opportunities — total recurring subscriptions worth reviewing.\n` +
+    `12. Budget vs. actuals — a full per-category comparison grid.\n` +
+    `If the user just greets you, lead with the single most urgent insight (an over-budget ` +
+    `category, else an upcoming bill) before inviting a full breakdown.\n\n` +
+    `If the word "budget" appears in the user's request AND they're asking you to set or add ` +
+    `one, they mean a monthly budget LIMIT for a category, not an expense — respond with a ` +
+    `structured suggestion in the format: [SUGGEST_ACTION] budget:₱[amount] category:[cat] ` +
     `alertThreshold:[pct] [/SUGGEST_ACTION] (default alertThreshold to 80 if unspecified). ` +
     `Otherwise, if the user asks you to add an expense, respond with: [SUGGEST_ACTION] ` +
-    `expense:₱[amount] category:[cat] description:[desc] [/SUGGEST_ACTION]. Never guess ` +
-    `amounts or categories — ask clarifying questions.`
+    `expense:₱[amount] category:[cat] description:[desc] [/SUGGEST_ACTION].`
   );
 }
 

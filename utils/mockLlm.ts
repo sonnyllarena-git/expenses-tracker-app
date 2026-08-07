@@ -5,8 +5,12 @@ import {
   categoryTotalsForMonth,
   type ChatContextData,
 } from '@/utils/aiContext';
-import { spentForCategory } from '@/utils/budget';
+import { overallBudgetUsage, spentForCategory } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
+import { upcomingRecurringExpenses } from '@/utils/dashboard';
+import { daysUntilPayday, formatDate, greetingForNow, nextPaydayDate, shiftDate } from '@/utils/date';
+import { budgetVsActual } from '@/utils/reports';
+import { weekOverWeekForCategory, weekOverWeekTotal } from '@/utils/trends';
 import type { Category } from '@/types';
 
 /**
@@ -24,6 +28,23 @@ const AMOUNT_PATTERN = /(?:₱|php)?\s*(\d[\d,]*(?:\.\d+)?)/i;
 const FOR_DESCRIPTION_PATTERN = /\bfor\s+([a-z][\w\s]{0,30})/i;
 const ALERT_THRESHOLD_PATTERN = /\balert\w*\s*(?:at|of|threshold\s*(?:at|of)?)?\s*(\d{1,3})\s*%/i;
 const DEFAULT_ALERT_THRESHOLD_PCT = 80;
+
+// Weeks 11-12: the 12 read-only "insight" knowledge areas, checked in order
+// of specificity so a narrowly-worded question (e.g. "budget comparison")
+// doesn't fall into a broader existing bucket (e.g. plain "budget").
+const GREETING_PATTERN = /\b(hi|hello|hey|good morning|good afternoon|good evening)\b/i;
+const PAYDAY_PATTERN = /\bpayday\b|\bam i on track\b/i;
+const RECURRING_PATTERN =
+  /\b(what.?s due|upcoming (bills?|payments?)|next payment|bills? due|due (this|next) week)\b/i;
+const SAVINGS_PATTERN = /\b(where can i save|cut expenses?|subscriptions?|save money)\b/i;
+const TRENDS_PATTERN = /\btrend(s|ing)?\b|\b(up or down|going up|going down)\b/i;
+const YESTERDAY_PATTERN = /\byesterday\b/i;
+const WEEK_SUMMARY_PATTERN = /\b(this week|summary)\b/i;
+const BEST_PRACTICES_PATTERN = /\b(tips|best practices?|advice)\b/i;
+const BUDGET_COMPARISON_PATTERN = /\b(budget comparison|how am i doing on (my )?budgets?)\b/i;
+const CATEGORY_INSIGHTS_PATTERN = /\b(top categories|breakdown|where.*money.*going)\b/i;
+const PAYMENT_METHOD_PATTERN = /\b(payment method|which wallet)\b/i;
+const RECURRING_DAYS_AHEAD = 7;
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   Food: [
@@ -224,6 +245,286 @@ function totalAnswer(context: ChatContextData): string {
   );
 }
 
+/** The soonest-due recurring bill within RECURRING_DAYS_AHEAD, with its real description if set. */
+function nextUpcomingBill(
+  context: ChatContextData
+): { label: string; amount: number; dueDate: string } | null {
+  const upcoming = upcomingRecurringExpenses(
+    context.recurringTemplates,
+    context.expenses,
+    context.categories,
+    context.today,
+    RECURRING_DAYS_AHEAD
+  );
+  if (upcoming.length === 0) {
+    return null;
+  }
+  const next = upcoming[0];
+  const template = context.recurringTemplates.find((t) => t.id === next.templateId);
+  return { label: template?.description || next.categoryName, amount: next.amount, dueDate: next.dueDate };
+}
+
+/** #9 Payday countdown: days until payday + overall budget usage so far. */
+function paydayAnswer(context: ChatContextData): string {
+  const [y, m, d] = context.today.split('-').map(Number);
+  const now = new Date(y, m - 1, d);
+  const days = daysUntilPayday(context.payday, now);
+  const dayText =
+    days === 0
+      ? 'Payday is today! 🎉'
+      : `${days} day${days === 1 ? '' : 's'} until payday (${formatDate(nextPaydayDate(context.payday, now))}).`;
+
+  const usage = overallBudgetUsage(context.budgets, context.expenses, context.month);
+  if (usage === null) {
+    return `${dayText} No budgets set yet to track against.`;
+  }
+  return `${dayText} You've spent ${Math.round(usage * 100)}% of your monthly budget so far.`;
+}
+
+/** #2 Recurring expense reminders: what's due within the next 7 days. */
+function recurringAnswer(context: ChatContextData): string {
+  const next = nextUpcomingBill(context);
+  if (!next) {
+    return 'No bills due in the next 7 days. 🎉';
+  }
+
+  const upcoming = upcomingRecurringExpenses(
+    context.recurringTemplates,
+    context.expenses,
+    context.categories,
+    context.today,
+    RECURRING_DAYS_AHEAD
+  );
+  const total = upcoming.reduce((sum, u) => sum + u.amount, 0);
+  return (
+    `${next.label} ${formatCurrency(next.amount, context.currency)} due ${formatDate(next.dueDate)}. ` +
+    `You have ${upcoming.length} bill${upcoming.length === 1 ? '' : 's'} due this week: ` +
+    `${formatCurrency(total, context.currency)} total.`
+  );
+}
+
+/** #11 Savings opportunity detection: total recurring subscriptions to review. */
+function savingsAnswer(context: ChatContextData): string {
+  const recurring = context.recurringTemplates.filter((t) => t.isRecurring);
+  if (recurring.length === 0) {
+    return "You don't have any recurring subscriptions set up to review.";
+  }
+  const total = recurring.reduce((sum, t) => sum + t.amount, 0);
+  const names = recurring
+    .slice(0, 2)
+    .map((t) => `${t.description || 'Subscription'} ${formatCurrency(t.amount, context.currency)}`)
+    .join(', ');
+  const suffix = recurring.length > 2 ? ', etc.' : '';
+  return (
+    `Your recurring subscriptions total ${formatCurrency(total, context.currency)}/month ` +
+    `(${names}${suffix}). Review if all are still needed.`
+  );
+}
+
+function describeTrend(pctChange: number | null): string {
+  if (pctChange === null) {
+    return '.';
+  }
+  const arrow = pctChange >= 0 ? '↑' : '↓';
+  return ` (${pctChange >= 0 ? '+' : ''}${Math.round(pctChange)}% ${arrow}).`;
+}
+
+/** #5 Spending trends: this week vs. last week, by category if one is named, else overall. */
+function trendsAnswer(message: string, context: ChatContextData): string {
+  const category = findCategoryByKeyword(message, context.categories);
+  if (category) {
+    const { thisWeekTotal, lastWeekTotal, pctChange } = weekOverWeekForCategory(
+      context.expenses,
+      context.categories,
+      category.id,
+      context.today
+    );
+    return (
+      `${category.name} ${formatCurrency(thisWeekTotal, context.currency)} this week vs ` +
+      `${formatCurrency(lastWeekTotal, context.currency)} last week${describeTrend(pctChange)}`
+    );
+  }
+
+  const { thisWeekTotal, lastWeekTotal, pctChange } = weekOverWeekTotal(context.expenses, context.today);
+  return (
+    `You've spent ${formatCurrency(thisWeekTotal, context.currency)} this week vs ` +
+    `${formatCurrency(lastWeekTotal, context.currency)} last week${describeTrend(pctChange)}`
+  );
+}
+
+/** #6 Daily summary: yesterday's spend by category. */
+function yesterdaySummaryAnswer(context: ChatContextData): string {
+  const yesterday = shiftDate(context.today, -1);
+  const dayExpenses = context.expenses.filter((e) => e.date === yesterday);
+  if (dayExpenses.length === 0) {
+    return "You didn't log any expenses yesterday.";
+  }
+
+  const total = dayExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const byCategory = new Map<string, number>();
+  for (const e of dayExpenses) {
+    byCategory.set(e.categoryId, (byCategory.get(e.categoryId) ?? 0) + e.amount);
+  }
+  const parts = [...byCategory.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([categoryId, amount]) => {
+      const name = context.categories.find((c) => c.id === categoryId)?.name ?? 'Uncategorized';
+      return `${name} ${formatCurrency(amount, context.currency)}`;
+    });
+
+  return (
+    `Yesterday ${formatCurrency(total, context.currency)} on ${dayExpenses.length} ` +
+    `transaction${dayExpenses.length === 1 ? '' : 's'}: ${parts.join(', ')}`
+  );
+}
+
+/** #6 Weekly summary: this week's spend by category, with percentage share. */
+function weekSummaryAnswer(context: ChatContextData): string {
+  const start = shiftDate(context.today, -6);
+  const weekExpenses = context.expenses.filter((e) => e.date >= start && e.date <= context.today);
+  if (weekExpenses.length === 0) {
+    return "You haven't logged any expenses this week.";
+  }
+
+  const total = weekExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const byCategory = new Map<string, number>();
+  for (const e of weekExpenses) {
+    byCategory.set(e.categoryId, (byCategory.get(e.categoryId) ?? 0) + e.amount);
+  }
+  const parts = [...byCategory.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([categoryId, amount]) => {
+      const name = context.categories.find((c) => c.id === categoryId)?.name ?? 'Uncategorized';
+      const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
+      return `${name} ${formatCurrency(amount, context.currency)} (${pct}%)`;
+    });
+
+  return `This week ${formatCurrency(total, context.currency)} spent: ${parts.join(', ')}`;
+}
+
+/** #7 Best practices for next month, derived from this month's budget-vs-actual. */
+function bestPracticesAnswer(context: ChatContextData): string {
+  const rows = budgetVsActual(context.budgets, context.expenses, context.categories, context.month);
+  if (rows.length === 0) {
+    return "You haven't set any budgets yet — set one to get next month's tips.";
+  }
+
+  const parts = rows.map((row) => {
+    if (row.isOverLimit) {
+      const over = formatCurrency(row.actual - row.budget.limitAmount, context.currency);
+      const limit = formatCurrency(row.budget.limitAmount, context.currency);
+      return `${row.categoryName} over budget by ${over} — try to keep under ${limit} next month`;
+    }
+    const actual = formatCurrency(row.actual, context.currency);
+    const limit = formatCurrency(row.budget.limitAmount, context.currency);
+    return `${row.categoryName} on track (${actual}/${limit})`;
+  });
+
+  return `${parts.join('. ')}.`;
+}
+
+/** #8 Category insights: top 3 categories by share of spend + zero-spend categories. */
+function categoryInsightsAnswer(context: ChatContextData): string {
+  const totals = categoryTotalsForMonth(context.expenses, context.categories, context.month);
+  if (totals.length === 0) {
+    return `No expenses recorded for ${context.monthLabel} yet.`;
+  }
+
+  const grandTotal = totals.reduce((sum, row) => sum + row.total, 0);
+  const top = totals.slice(0, 3).map((row) => {
+    const pct = grandTotal > 0 ? Math.round((row.total / grandTotal) * 100) : 0;
+    return `${row.name} ${pct}%`;
+  });
+  const spentIds = new Set(totals.map((row) => row.categoryId));
+  const zeroSpend = context.categories.filter((c) => !spentIds.has(c.id)).map((c) => c.name);
+
+  let response = `Top categories: ${top.join(', ')}.`;
+  if (zeroSpend.length > 0) {
+    response += ` No spending on: ${zeroSpend.join(', ')}.`;
+  }
+  return response;
+}
+
+/** #10 Payment method insights: which wallet gets used most, by transaction count. */
+function paymentMethodAnswer(context: ChatContextData): string {
+  const monthExpenses = context.expenses.filter((e) => e.date.startsWith(context.month));
+  if (monthExpenses.length === 0) {
+    return `No transactions recorded for ${context.monthLabel} yet.`;
+  }
+
+  const counts = new Map<string, number>();
+  for (const e of monthExpenses) {
+    const key = e.walletId ?? 'unassigned';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const rows = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([walletId, count]) => {
+      const name =
+        walletId === 'unassigned'
+          ? 'Unassigned'
+          : context.wallets.find((w) => w.id === walletId)?.name ?? 'Unknown wallet';
+      return { name, pct: Math.round((count / monthExpenses.length) * 100) };
+    });
+
+  const [topRow, ...rest] = rows;
+  const restText = rest.map((r) => `${r.name} ${r.pct}%`).join(', ');
+  return `You mostly use ${topRow.name} (${topRow.pct}% of transactions).${restText ? ` ${restText}.` : ''}`;
+}
+
+/** #12 Budget vs. actuals: a full per-category comparison grid, one row per budgeted category. */
+function budgetComparisonAnswer(context: ChatContextData): string {
+  const rows = budgetVsActual(context.budgets, context.expenses, context.categories, context.month);
+  if (rows.length === 0) {
+    return `You haven't set any budgets for ${context.monthLabel} yet.`;
+  }
+
+  const lines = rows.map((row) => {
+    const pct =
+      row.budget.limitAmount > 0 ? Math.round((row.actual / row.budget.limitAmount) * 100) : 0;
+    const tail = row.isOverLimit
+      ? `${formatCurrency(row.actual - row.budget.limitAmount, context.currency)} over`
+      : `${formatCurrency(row.remaining, context.currency)} left`;
+    const actual = formatCurrency(row.actual, context.currency);
+    const limit = formatCurrency(row.budget.limitAmount, context.currency);
+    return `${row.categoryName}: ${actual} spent of ${limit} (${pct}%) — ${tail}`;
+  });
+
+  return lines.join('\n');
+}
+
+/** Proactive greeting: leads with the most urgent insight before inviting a full breakdown. */
+function greetingAnswer(context: ChatContextData): string {
+  const greeting = greetingForNow();
+  const rows = budgetVsActual(context.budgets, context.expenses, context.categories, context.month);
+  const worst = [...rows].sort(
+    (a, b) => b.actual / b.budget.limitAmount - a.actual / a.budget.limitAmount
+  )[0];
+  const bill = nextUpcomingBill(context);
+
+  if (worst) {
+    const pct =
+      worst.budget.limitAmount > 0 ? Math.round((worst.actual / worst.budget.limitAmount) * 100) : 0;
+    const remaining = formatCurrency(Math.abs(worst.remaining), context.currency);
+    const status = worst.isOverLimit ? `over by ${remaining}` : `${remaining} left`;
+    let response = `${greeting} You're at ${pct}% of your ${worst.categoryName} budget (${status}).`;
+    if (bill) {
+      response += ` Also, ${bill.label} is due ${formatDate(bill.dueDate)}.`;
+    }
+    return `${response} Want a full breakdown?`;
+  }
+
+  if (bill) {
+    return (
+      `${greeting} ${bill.label} ${formatCurrency(bill.amount, context.currency)} is due ` +
+      `${formatDate(bill.dueDate)}. Want a full breakdown?`
+    );
+  }
+
+  return `${greeting} Ask me about your spending, budgets, wallets, or loans this month.`;
+}
+
 /** Pattern-matches keywords in `message` and returns a templated, context-aware reply. */
 export function generateMockResponse(message: string, context: ChatContextData): string {
   const budgetAction = tryBuildBudgetSuggestedAction(message, context);
@@ -236,13 +537,48 @@ export function generateMockResponse(message: string, context: ChatContextData):
     return suggestedAction;
   }
 
+  const lower = message.toLowerCase();
+
+  if (GREETING_PATTERN.test(lower)) {
+    return greetingAnswer(context);
+  }
+  if (PAYDAY_PATTERN.test(lower)) {
+    return paydayAnswer(context);
+  }
+  if (RECURRING_PATTERN.test(lower)) {
+    return recurringAnswer(context);
+  }
+  if (SAVINGS_PATTERN.test(lower)) {
+    return savingsAnswer(context);
+  }
+  if (TRENDS_PATTERN.test(lower)) {
+    return trendsAnswer(message, context);
+  }
+  if (YESTERDAY_PATTERN.test(lower)) {
+    return yesterdaySummaryAnswer(context);
+  }
+  if (WEEK_SUMMARY_PATTERN.test(lower)) {
+    return weekSummaryAnswer(context);
+  }
+  if (BEST_PRACTICES_PATTERN.test(lower)) {
+    return bestPracticesAnswer(context);
+  }
+  if (BUDGET_COMPARISON_PATTERN.test(lower)) {
+    return budgetComparisonAnswer(context);
+  }
+  if (CATEGORY_INSIGHTS_PATTERN.test(lower)) {
+    return categoryInsightsAnswer(context);
+  }
+  if (PAYMENT_METHOD_PATTERN.test(lower)) {
+    return paymentMethodAnswer(context);
+  }
+
   const category = findCategoryByKeyword(message, context.categories);
   if (category) {
     return categoryAnswer(category, context);
   }
 
-  const lower = message.toLowerCase();
-  if (/\b(wallet|balance|net worth)\b/.test(lower)) {
+  if (/\b(wallet|balance|net worth|how much do i have)\b/.test(lower)) {
     return walletAnswer(context);
   }
   if (/\bloan/.test(lower)) {
@@ -251,7 +587,7 @@ export function generateMockResponse(message: string, context: ChatContextData):
   if (/\bbudget/.test(lower)) {
     return budgetAnswer(context);
   }
-  if (/\b(spend|spent|total|summary|overview)\b|this month/.test(lower)) {
+  if (/\b(spend|spent|total|overview)\b|this month/.test(lower)) {
     return totalAnswer(context);
   }
 

@@ -11,6 +11,7 @@ import { useExpenseStore } from '@/store/useExpenseStore';
 import type { ChatMessage, SuggestedActionStatus } from '@/types';
 import type { ChatContextData } from '@/utils/aiContext';
 import { currentMonth, today } from '@/utils/date';
+import type { BubbleCorner } from '@/utils/dragCorner';
 import { generateMockResponse } from '@/utils/mockLlm';
 import { withTimeout } from '@/utils/withTimeout';
 
@@ -106,6 +107,8 @@ interface AIChatState {
   isChatOpen: boolean;
   /** True once an assistant reply has arrived while the modal was closed. */
   hasUnread: boolean;
+  /** Which screen corner the bubble/panel is snapped to; persists across close/reopen for the session. */
+  bubbleCorner: BubbleCorner;
   /** Loads persisted history for the account; a no-op if history was never enabled. */
   load: (userId: string) => Promise<void>;
   sendMessage: (input: SendMessageInput) => Promise<void>;
@@ -115,6 +118,7 @@ interface AIChatState {
   clearHistory: (userId: string) => Promise<void>;
   openChat: () => void;
   closeChat: () => void;
+  setBubbleCorner: (corner: BubbleCorner) => void;
 }
 
 export const useAIChatStore = create<AIChatState>((set, get) => ({
@@ -122,6 +126,7 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
   isLoading: false,
   isChatOpen: false,
   hasUnread: false,
+  bubbleCorner: 'bottom-right',
   load: async (userId: string) => {
     const messages = await listChatMessages(userId);
     set({ messages });
@@ -212,4 +217,5 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
   },
   openChat: () => set({ isChatOpen: true, hasUnread: false }),
   closeChat: () => set({ isChatOpen: false }),
+  setBubbleCorner: (corner) => set({ bubbleCorner: corner }),
 }));

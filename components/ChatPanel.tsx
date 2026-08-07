@@ -22,12 +22,14 @@ import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useLoanStore } from '@/store/useLoanStore';
+import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useWalletStore } from '@/store/useWalletStore';
 import type { ChatMessage } from '@/types';
 import { buildChatContext } from '@/utils/aiContext';
 import { formatCurrency } from '@/utils/currency';
 import { currentMonth } from '@/utils/date';
+import type { PanHandlers } from '@/utils/dragCorner';
 import { downloadModel, isModelDownloaded } from '@/utils/modelDownload';
 
 type DownloadStatus = 'ready' | 'downloading' | 'failed';
@@ -35,6 +37,8 @@ type DownloadStatus = 'ready' | 'downloading' | 'failed';
 interface ChatPanelProps {
   /** Renders a header with a close button when set — used by the bubble modal. Omit for a full-screen host that provides its own header (e.g. a Stack.Screen title). */
   onClose?: () => void;
+  /** Spread onto the header row so dragging it repositions the floating panel — only meaningful alongside onClose. */
+  headerPanHandlers?: PanHandlers;
 }
 
 /**
@@ -120,7 +124,7 @@ function ThinkingIndicator() {
   );
 }
 
-export function ChatPanel({ onClose }: ChatPanelProps) {
+export function ChatPanel({ onClose, headerPanHandlers }: ChatPanelProps) {
   const colorScheme = useColorScheme();
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [inputText, setInputText] = useState('');
@@ -134,6 +138,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const budgets = useBudgetStore((state) => state.budgets);
   const wallets = useWalletStore((state) => state.wallets);
   const loans = useLoanStore((state) => state.loans);
+  const recurringTemplates = useRecurringStore((state) => state.templates);
 
   const hideToast = useCallback(() => setToastMessage(null), []);
 
@@ -154,6 +159,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         loans,
         month: currentMonth(),
         currency: account.currency,
+        recurringTemplates,
+        payday: account.payday,
       }),
       historyEnabled: account.aiChatHistoryEnabled,
     });
@@ -195,7 +202,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   return (
     <View style={styles.container}>
       {onClose && (
-        <View style={styles.header}>
+        <View style={styles.header} {...headerPanHandlers}>
           <Text style={styles.headerTitle}>AI Assistant</Text>
           <Pressable onPress={onClose} hitSlop={8}>
             <Ionicons name="close" size={24} color={Colors[colorScheme].text} />

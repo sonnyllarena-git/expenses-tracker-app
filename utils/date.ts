@@ -128,6 +128,31 @@ export function daysUntilPayday(payday: number, now: Date = new Date()): number 
   return Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/** The next occurrence of `payday` (1-31) on/after `now`, as a YYYY-MM-DD date. */
+export function nextPaydayDate(payday: number, now: Date = new Date()): string {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  let next = paydayDateInMonth(today.getFullYear(), today.getMonth(), payday);
+  if (next < today) {
+    next = paydayDateInMonth(today.getFullYear(), today.getMonth() + 1, payday);
+  }
+
+  const y = next.getFullYear();
+  const m = String(next.getMonth() + 1).padStart(2, '0');
+  const d = String(next.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Shifts a YYYY-MM-DD date by `deltaDays` (negative moves backward). */
+export function shiftDate(date: string, deltaDays: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const shifted = new Date(year, month - 1, day + deltaDays);
+  const y = shifted.getFullYear();
+  const m = String(shifted.getMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /** True if `value` is a real calendar date in YYYY-MM-DD form (rejects e.g. 2026-02-30). */
 export function isValidDateString(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);

@@ -88,7 +88,13 @@ const loans: Loan[] = [
   },
 ];
 
-function makeContext(overrides: { expenses?: Expense[]; budgets?: Budget[] }): ChatContextData {
+function makeContext(overrides: {
+  expenses?: Expense[];
+  budgets?: Budget[];
+  recurringTemplates?: Expense[];
+  payday?: number;
+  today?: string;
+}): ChatContextData {
   return buildChatContext({
     expenses: overrides.expenses ?? [],
     categories,
@@ -97,6 +103,9 @@ function makeContext(overrides: { expenses?: Expense[]; budgets?: Budget[] }): C
     loans,
     month: '2026-08',
     currency: 'PHP',
+    recurringTemplates: overrides.recurringTemplates,
+    payday: overrides.payday,
+    today: overrides.today,
   });
 }
 
@@ -209,5 +218,217 @@ describe('generateMockResponse', () => {
     const response = generateMockResponse('set a ₱2000 budget', context);
     expect(response).not.toContain('[SUGGEST_ACTION]');
     expect(response).toContain('Which category should it apply to?');
+  });
+});
+
+describe('generateMockResponse — Weeks 11-12 insight knowledge areas', () => {
+  it('#9 answers a payday countdown with days remaining and budget usage so far', () => {
+    const context = makeContext({
+      expenses: [makeExpense({ amount: 2000, categoryId: 'cat-food', date: '2026-08-01' })],
+      budgets: [makeBudget({ limitAmount: 5000 })],
+      payday: 15,
+      today: '2026-08-06',
+    });
+    const response = generateMockResponse('When is payday?', context);
+    expect(response).toContain('9 days until payday');
+    expect(response).toContain('Aug 15, 2026');
+    expect(response).toContain("You've spent 40% of your monthly budget so far.");
+  });
+
+  it('#2 lists upcoming recurring bills due within the next 7 days', () => {
+    const netflix = makeExpense({
+      id: 'template-netflix',
+      isRecurring: true,
+      recurringFrequency: 'monthly',
+      categoryId: 'cat-food',
+      amount: 599,
+      date: '2026-08-10',
+      description: 'Netflix',
+    });
+    const context = makeContext({ recurringTemplates: [netflix], today: '2026-08-05' });
+    const response = generateMockResponse("What's due this week?", context);
+    expect(response).toContain('Netflix ₱599.00 due Aug 10, 2026');
+    expect(response).toContain('1 bill due this week: ₱599.00 total.');
+  });
+
+  it('#2 reports no bills due when nothing is upcoming', () => {
+    const context = makeContext({ today: '2026-08-05' });
+    expect(generateMockResponse('Any upcoming bills?', context)).toBe(
+      'No bills due in the next 7 days. 🎉'
+    );
+  });
+
+  it('#3 answers a "how much do I have" wallet question', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('How much do I have?', context);
+    expect(response).toContain('GCash ₱8,200.00');
+    expect(response).toContain('Net worth: ₱8,200.00');
+  });
+
+  it('#11 flags total recurring subscriptions worth reviewing', () => {
+    const netflix = makeExpense({
+      id: 't1',
+      isRecurring: true,
+      recurringFrequency: 'monthly',
+      amount: 599,
+      description: 'Netflix',
+    });
+    const spotify = makeExpense({
+      id: 't2',
+      isRecurring: true,
+      recurringFrequency: 'monthly',
+      amount: 180,
+      description: 'Spotify',
+    });
+    const context = makeContext({ recurringTemplates: [netflix, spotify] });
+    const response = generateMockResponse('Where can I save?', context);
+    expect(response).toContain('₱779.00/month');
+    expect(response).toContain('Netflix ₱599.00');
+    expect(response).toContain('Spotify ₱180.00');
+  });
+
+  it('#5 compares this week vs last week spending overall', () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({ amount: 2300, categoryId: 'cat-food', date: '2026-08-05' }),
+        makeExpense({ amount: 1650, categoryId: 'cat-food', date: '2026-07-28' }),
+      ],
+      today: '2026-08-06',
+    });
+    const response = generateMockResponse('Are my spending trends up or down?', context);
+    expect(response).toContain('₱2,300.00 this week vs ₱1,650.00 last week');
+    expect(response).toContain('+39%');
+  });
+
+  it('#5 compares this week vs last week for a named category', () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({ amount: 2300, categoryId: 'cat-food', date: '2026-08-05' }),
+        makeExpense({ amount: 1650, categoryId: 'cat-food', date: '2026-07-28' }),
+      ],
+      today: '2026-08-06',
+    });
+    const response = generateMockResponse("How's food trending?", context);
+    expect(response).toBe('Food ₱2,300.00 this week vs ₱1,650.00 last week (+39% ↑).');
+  });
+
+  it("#6 summarizes yesterday's spend by category", () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({ amount: 250, categoryId: 'cat-food', date: '2026-08-05' }),
+        makeExpense({ amount: 200, categoryId: 'cat-transport', date: '2026-08-05' }),
+      ],
+      today: '2026-08-06',
+    });
+    const response = generateMockResponse('What did I spend yesterday?', context);
+    expect(response).toBe('Yesterday ₱450.00 on 2 transactions: Food ₱250.00, Transport ₱200.00');
+  });
+
+  it("#6 summarizes this week's spend by category with percentage share", () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({ amount: 1200, categoryId: 'cat-food', date: '2026-08-03' }),
+        makeExpense({ amount: 800, categoryId: 'cat-transport', date: '2026-08-04' }),
+      ],
+      today: '2026-08-06',
+    });
+    const response = generateMockResponse('this week total?', context);
+    expect(response).toBe('This week ₱2,000.00 spent: Food ₱1,200.00 (60%), Transport ₱800.00 (40%)');
+  });
+
+  it('#7 gives next-month tips per budgeted category', () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({ amount: 5150, categoryId: 'cat-food', date: '2026-08-01' }),
+        makeExpense({ amount: 900, categoryId: 'cat-transport', date: '2026-08-02' }),
+      ],
+      budgets: [
+        makeBudget({ categoryId: 'cat-food', limitAmount: 5000 }),
+        makeBudget({ id: 'budget-transport', categoryId: 'cat-transport', limitAmount: 1200 }),
+      ],
+    });
+    const response = generateMockResponse('Any tips for next month?', context);
+    expect(response).toContain('Food over budget by ₱150.00 — try to keep under ₱5,000.00 next month');
+    expect(response).toContain('Transport on track (₱900.00/₱1,200.00)');
+  });
+
+  it('#8 surfaces top categories by share of spend', () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({ amount: 3000, categoryId: 'cat-food', date: '2026-08-01' }),
+        makeExpense({ amount: 1000, categoryId: 'cat-transport', date: '2026-08-02' }),
+      ],
+    });
+    const response = generateMockResponse('Give me a breakdown', context);
+    expect(response).toBe('Top categories: Food 75%, Transport 25%.');
+  });
+
+  it('#10 reports which wallet gets used most, by transaction share', () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({
+          amount: 100,
+          categoryId: 'cat-food',
+          date: '2026-08-01',
+          walletId: 'wallet-1',
+        }),
+        makeExpense({
+          amount: 100,
+          categoryId: 'cat-food',
+          date: '2026-08-02',
+          walletId: 'wallet-1',
+        }),
+        makeExpense({ amount: 100, categoryId: 'cat-transport', date: '2026-08-03' }),
+      ],
+    });
+    const response = generateMockResponse('Which wallet do I use most?', context);
+    expect(response).toContain('You mostly use GCash (67% of transactions).');
+    expect(response).toContain('Unassigned 33%');
+  });
+
+  it('#12 gives a full budget-vs-actual comparison grid', () => {
+    const context = makeContext({
+      expenses: [
+        makeExpense({ amount: 5150, categoryId: 'cat-food', date: '2026-08-01' }),
+        makeExpense({ amount: 900, categoryId: 'cat-transport', date: '2026-08-02' }),
+      ],
+      budgets: [
+        makeBudget({ categoryId: 'cat-food', limitAmount: 5000 }),
+        makeBudget({ id: 'budget-transport', categoryId: 'cat-transport', limitAmount: 1200 }),
+      ],
+    });
+    const response = generateMockResponse('How am I doing on my budgets?', context);
+    expect(response).toBe(
+      'Food: ₱5,150.00 spent of ₱5,000.00 (103%) — ₱150.00 over\n' +
+        'Transport: ₱900.00 spent of ₱1,200.00 (75%) — ₱300.00 left'
+    );
+  });
+
+  it('greets proactively with the most urgent budget alert and an upcoming bill', () => {
+    const netflix = makeExpense({
+      id: 't1',
+      isRecurring: true,
+      recurringFrequency: 'monthly',
+      categoryId: 'cat-food',
+      amount: 599,
+      date: '2026-08-10',
+      description: 'Netflix',
+    });
+    const context = makeContext({
+      expenses: [makeExpense({ amount: 4250, categoryId: 'cat-food', date: '2026-08-01' })],
+      budgets: [makeBudget({ categoryId: 'cat-food', limitAmount: 5000 })],
+      recurringTemplates: [netflix],
+      today: '2026-08-05',
+    });
+    const response = generateMockResponse('hi', context);
+    expect(response).toContain("You're at 85% of your Food budget (₱750.00 left).");
+    expect(response).toContain('Netflix is due Aug 10, 2026.');
+    expect(response).toContain('Want a full breakdown?');
+  });
+
+  it('greets with a generic prompt when there is nothing urgent to surface', () => {
+    const context = makeContext({ today: '2026-08-05' });
+    const response = generateMockResponse('hello', context);
+    expect(response).toContain('Ask me about your spending, budgets, wallets, or loans this month.');
   });
 });
