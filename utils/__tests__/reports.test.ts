@@ -2,12 +2,13 @@ import {
   budgetVsActual,
   groupExpensesByCategory,
   groupExpensesByDay,
+  groupExpensesBySubcategory,
   groupExpensesByWallet,
   groupExpensesByWeek,
   topWalletByWeek,
 } from '../reports';
 import { theme } from '@/theme';
-import type { Budget, Category, Expense, Wallet } from '@/types';
+import type { Budget, Category, Expense, Subcategory, Wallet } from '@/types';
 
 function makeExpense(overrides: Partial<Expense>): Expense {
   return {
@@ -16,6 +17,7 @@ function makeExpense(overrides: Partial<Expense>): Expense {
     addedByUserId: null,
     amount: 100,
     categoryId: 'cat-food',
+    subcategoryId: null,
     date: '2026-08-01',
     description: '',
     tags: [],
@@ -38,6 +40,17 @@ function makeCategory(overrides: Partial<Category>): Category {
     name: 'Food',
     icon: 'fast-food',
     color: '#F4511E',
+    isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeSubcategory(overrides: Partial<Subcategory>): Subcategory {
+  return {
+    id: 'sub-groceries',
+    categoryId: 'cat-food',
+    name: 'Groceries',
     isCustom: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     ...overrides,
@@ -104,6 +117,45 @@ describe('groupExpensesByCategory', () => {
   it('returns an empty array when nothing falls in the given month', () => {
     const expenses = [makeExpense({ date: '2026-07-01' })];
     expect(groupExpensesByCategory(expenses, categories, '2026-08')).toEqual([]);
+  });
+});
+
+describe('groupExpensesBySubcategory', () => {
+  const subcategories = [
+    makeSubcategory({}),
+    makeSubcategory({ id: 'sub-restaurants', name: 'Restaurants' }),
+  ];
+
+  it('sums amounts per subcategory within one category, filtered to the given month, sorted descending', () => {
+    const expenses = [
+      makeExpense({ categoryId: 'cat-food', subcategoryId: 'sub-groceries', amount: 100, date: '2026-08-01' }),
+      makeExpense({ categoryId: 'cat-food', subcategoryId: 'sub-restaurants', amount: 300, date: '2026-08-02' }),
+      makeExpense({ categoryId: 'cat-food', subcategoryId: 'sub-groceries', amount: 50, date: '2026-08-15' }),
+      makeExpense({ categoryId: 'cat-transport', subcategoryId: 'sub-groceries', amount: 999, date: '2026-08-01' }),
+      makeExpense({ categoryId: 'cat-food', subcategoryId: 'sub-groceries', amount: 999, date: '2026-07-31' }),
+    ];
+
+    const slices = groupExpensesBySubcategory(expenses, subcategories, 'cat-food', '2026-08');
+
+    expect(slices).toEqual([
+      { subcategoryId: 'sub-restaurants', name: 'Restaurants', value: 300 },
+      { subcategoryId: 'sub-groceries', name: 'Groceries', value: 150 },
+    ]);
+  });
+
+  it('groups expenses with no subcategoryId into an "Uncategorized" bucket', () => {
+    const expenses = [
+      makeExpense({ categoryId: 'cat-food', subcategoryId: null, amount: 75, date: '2026-08-01' }),
+    ];
+    const slices = groupExpensesBySubcategory(expenses, subcategories, 'cat-food', '2026-08');
+    expect(slices).toEqual([{ subcategoryId: null, name: 'Uncategorized', value: 75 }]);
+  });
+
+  it('returns an empty array when nothing falls in the given category/month', () => {
+    const expenses = [
+      makeExpense({ categoryId: 'cat-food', subcategoryId: 'sub-groceries', date: '2026-07-01' }),
+    ];
+    expect(groupExpensesBySubcategory(expenses, subcategories, 'cat-food', '2026-08')).toEqual([]);
   });
 });
 

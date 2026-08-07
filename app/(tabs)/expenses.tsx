@@ -12,6 +12,7 @@ import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useSubcategoryStore } from '@/store/useSubcategoryStore';
 import { theme } from '@/theme';
 import { hasOverThresholdBudget } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
@@ -32,6 +33,7 @@ export default function ExpenseListScreen() {
   const expenses = useExpenseStore((state) => state.expenses);
   const loadExpenses = useExpenseStore((state) => state.load);
   const categories = useCategoryStore((state) => state.categories);
+  const subcategories = useSubcategoryStore((state) => state.subcategories);
   const budgets = useBudgetStore((state) => state.budgets);
   const loadBudgets = useBudgetStore((state) => state.load);
   const colorScheme = useColorScheme();
@@ -47,6 +49,7 @@ export default function ExpenseListScreen() {
   );
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -67,6 +70,7 @@ export default function ExpenseListScreen() {
     useCallback(() => {
       return () => {
         setSelectedCategoryId(ALL_CATEGORIES);
+        setSelectedSubcategoryId(null);
         setSearchQuery('');
         setDateFrom('');
         setDateTo('');
@@ -104,10 +108,17 @@ export default function ExpenseListScreen() {
   const validDateFrom = isValidDateString(dateFrom) ? dateFrom : null;
   const validDateTo = isValidDateString(dateTo) ? dateTo : null;
   const hasActiveFilter =
-    selectedCategoryId !== ALL_CATEGORIES || !!trimmedQuery || !!validDateFrom || !!validDateTo;
+    selectedCategoryId !== ALL_CATEGORIES ||
+    !!selectedSubcategoryId ||
+    !!trimmedQuery ||
+    !!validDateFrom ||
+    !!validDateTo;
 
   const filteredExpenses = expenses.filter((e) => {
     if (selectedCategoryId !== ALL_CATEGORIES && e.categoryId !== selectedCategoryId) {
+      return false;
+    }
+    if (selectedSubcategoryId && e.subcategoryId !== selectedSubcategoryId) {
       return false;
     }
     if (trimmedQuery && !e.description.toLowerCase().includes(trimmedQuery)) {
@@ -202,6 +213,18 @@ export default function ExpenseListScreen() {
             />
           </View>
 
+          {selectedSubcategoryId && (
+            <View style={styles.subcategoryFilterBanner}>
+              <Text style={[styles.subcategoryFilterText, { color: Colors[colorScheme].primary }]}>
+                Filtered by:{' '}
+                {subcategories.find((s) => s.id === selectedSubcategoryId)?.name ?? 'Subcategory'}
+              </Text>
+              <Pressable onPress={() => setSelectedSubcategoryId(null)} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={Colors[colorScheme].primary} />
+              </Pressable>
+            </View>
+          )}
+
           <Text style={styles.totalText}>
             Total: {formatCurrency(filteredTotal, account?.currency ?? 'PHP')} ·{' '}
             {filteredExpenses.length} {filteredExpenses.length === 1 ? 'expense' : 'expenses'}
@@ -228,42 +251,61 @@ export default function ExpenseListScreen() {
             }
             renderItem={({ item }) => {
               const category = categories.find((c) => c.id === item.categoryId);
+              const subcategory = subcategories.find((s) => s.id === item.subcategoryId);
               return (
-                <View style={styles.row}>
-                  <Pressable
-                    onPress={() => openEdit(item.id)}
-                    style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
-                  >
-                    {item.receiptPhotoPath ? (
-                      <Image source={{ uri: item.receiptPhotoPath }} style={styles.iconCircle} />
-                    ) : (
-                      <View
-                        style={[
-                          styles.iconCircle,
-                          { backgroundColor: category?.color ?? theme.categoryFallback },
-                        ]}
+                <View style={styles.rowOuter}>
+                  {subcategory && (
+                    // A sibling of `row` below, NOT nested inside its Pressable —
+                    // an ancestor Pressable wins touch capture over a nested one
+                    // in this app, so tapping to filter needs its own responder.
+                    <Pressable
+                      onPress={() => setSelectedSubcategoryId(subcategory.id)}
+                      hitSlop={4}
+                      style={styles.subcategoryChip}
+                    >
+                      <Text
+                        style={[styles.subcategoryChipText, { color: Colors[colorScheme].primary }]}
                       >
-                        <Ionicons
-                          name={(category?.icon as IoniconName) ?? 'help-circle'}
-                          size={18}
-                          color="#fff"
-                        />
-                      </View>
-                    )}
-                    <View style={styles.rowText}>
-                      <Text style={styles.rowTitle}>{category?.name ?? 'Uncategorized'}</Text>
-                      {!!item.description && (
-                        <Text style={styles.rowSubtitle}>{item.description}</Text>
+                        {subcategory.name} ({category?.name ?? 'Uncategorized'})
+                      </Text>
+                    </Pressable>
+                  )}
+                  <View style={styles.row}>
+                    <Pressable
+                      onPress={() => openEdit(item.id)}
+                      style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
+                    >
+                      {item.receiptPhotoPath ? (
+                        <Image source={{ uri: item.receiptPhotoPath }} style={styles.iconCircle} />
+                      ) : (
+                        <View
+                          style={[
+                            styles.iconCircle,
+                            { backgroundColor: category?.color ?? theme.categoryFallback },
+                          ]}
+                        >
+                          <Ionicons
+                            name={(category?.icon as IoniconName) ?? 'help-circle'}
+                            size={18}
+                            color="#fff"
+                          />
+                        </View>
                       )}
-                      <Text style={styles.rowDate}>{formatDate(item.date)}</Text>
-                    </View>
-                    <Text style={styles.rowAmount}>
-                      {formatCurrency(item.amount, account?.currency ?? 'PHP')}
-                    </Text>
-                  </Pressable>
-                  <Pressable onPress={() => openEdit(item.id)} hitSlop={8} style={styles.rowIcon}>
-                    <Ionicons name="create-outline" size={20} color={Colors[colorScheme].text} />
-                  </Pressable>
+                      <View style={styles.rowText}>
+                        <Text style={styles.rowTitle}>{category?.name ?? 'Uncategorized'}</Text>
+                        {!!item.description && (
+                          <Text style={styles.rowSubtitle}>{item.description}</Text>
+                        )}
+                        <Text style={styles.rowDate}>{formatDate(item.date)}</Text>
+                      </View>
+                      <Text style={styles.rowAmount}>
+                        {formatCurrency(item.amount, account?.currency ?? 'PHP')}
+                      </Text>
+                    </Pressable>
+                    <Pressable onPress={() => openEdit(item.id)} hitSlop={8} style={styles.rowIcon}>
+                      <Ionicons name="create-outline" size={20} color={Colors[colorScheme].text} />
+                    </Pressable>
+                  </View>
                 </View>
               );
             }}
@@ -343,6 +385,30 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: StyleSheet.hairlineWidth,
+  },
+  subcategoryFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  subcategoryFilterText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  rowOuter: {
+    gap: 2,
+  },
+  subcategoryChip: {
+    alignSelf: 'flex-start',
+    paddingTop: 4,
+  },
+  subcategoryChipText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   row: {
     flexDirection: 'row',

@@ -1,15 +1,25 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 
+import { SubcategoryPicker } from '@/components/SubcategoryPicker';
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import type { Category, SuggestedActionStatus } from '@/types';
+import { useSubcategoryStore } from '@/store/useSubcategoryStore';
+import type { Category, SuggestedActionStatus, WalletType } from '@/types';
 import { validateSuggestedAction, type ParsedSuggestedAction } from '@/utils/suggestedAction';
 import { formatCurrency } from '@/utils/currency';
 
 export type ResolvedSuggestedAction =
-  | { kind: 'expense'; amount: number; categoryId: string; description: string }
-  | { kind: 'budget'; amount: number; categoryId: string; alertThreshold: number };
+  | {
+      kind: 'expense';
+      amount: number;
+      categoryId: string;
+      subcategoryId: string | null;
+      description: string;
+    }
+  | { kind: 'budget'; amount: number; categoryId: string; alertThreshold: number }
+  | { kind: 'wallet'; amount: number; walletType: WalletType; walletName: string };
 
 interface SuggestedActionCardProps {
   action: ParsedSuggestedAction;
@@ -35,7 +45,13 @@ export function SuggestedActionCard({
   onCancel,
 }: SuggestedActionCardProps) {
   const colorScheme = useColorScheme();
-  const validated = validateSuggestedAction(action, categories);
+  const subcategories = useSubcategoryStore((state) => state.subcategories);
+  const validated = validateSuggestedAction(action, categories, subcategories);
+  // Lets the user override a wrong AI-guessed subcategory before confirming
+  // (see SubcategoryPicker below) — initialized once from the AI's guess.
+  const [overrideSubcategoryId, setOverrideSubcategoryId] = useState<string | null>(() =>
+    validated.valid && validated.kind === 'expense' ? validated.subcategoryId : null
+  );
 
   if (!validated.valid) {
     return (
@@ -48,14 +64,17 @@ export function SuggestedActionCard({
   }
 
   const isBudget = validated.kind === 'budget';
+  const isWallet = validated.kind === 'wallet';
 
   if (status === 'confirmed') {
     return (
       <View style={[styles.card, { borderColor: Colors[colorScheme].success }]}>
         <Text style={[styles.confirmedText, { color: Colors[colorScheme].success }]}>
-          {isBudget
-            ? `✓ Set ${formatCurrency(validated.amount, currency)}/month ${validated.categoryName} budget`
-            : `✓ Added ${formatCurrency(validated.amount, currency)} ${validated.categoryName} expense`}
+          {isWallet
+            ? `✓ Added ${formatCurrency(validated.amount, currency)} to ${validated.walletName} wallet`
+            : isBudget
+              ? `✓ Set ${formatCurrency(validated.amount, currency)}/month ${validated.categoryName} budget`
+              : `✓ Added ${formatCurrency(validated.amount, currency)} ${validated.categoryName} expense`}
         </Text>
       </View>
     );
@@ -72,9 +91,17 @@ export function SuggestedActionCard({
   return (
     <View style={[styles.card, { borderColor: Colors[colorScheme].border }]}>
       <Text style={styles.prompt}>
-        {isBudget ? 'Would you like to set this budget?' : 'Would you like to add this?'}
+        {isWallet
+          ? `Add ${formatCurrency(validated.amount, currency)} to ${validated.walletName} wallet?`
+          : isBudget
+            ? 'Would you like to set this budget?'
+            : 'Would you like to add this?'}
       </Text>
-      {isBudget ? (
+      {isWallet ? (
+        <Text style={styles.amount}>
+          {formatCurrency(validated.amount, currency)} → {validated.walletName}
+        </Text>
+      ) : isBudget ? (
         <>
           <Text style={styles.amount}>{formatCurrency(validated.amount, currency)}/month</Text>
           <Text style={styles.category}>Category: {validated.categoryName}</Text>
@@ -88,25 +115,38 @@ export function SuggestedActionCard({
             {formatCurrency(validated.amount, currency)} {validated.description}
           </Text>
           <Text style={styles.category}>Category: {validated.categoryName}</Text>
+          <SubcategoryPicker
+            categoryId={validated.categoryId}
+            value={overrideSubcategoryId}
+            onChange={setOverrideSubcategoryId}
+          />
         </>
       )}
       <View style={styles.buttonRow}>
         <Pressable
           onPress={() =>
             onConfirm(
-              isBudget
+              isWallet
                 ? {
-                    kind: 'budget',
+                    kind: 'wallet',
                     amount: validated.amount,
-                    categoryId: validated.categoryId,
-                    alertThreshold: validated.alertThreshold,
+                    walletType: validated.walletType,
+                    walletName: validated.walletName,
                   }
-                : {
-                    kind: 'expense',
-                    amount: validated.amount,
-                    categoryId: validated.categoryId,
-                    description: validated.description,
-                  }
+                : isBudget
+                  ? {
+                      kind: 'budget',
+                      amount: validated.amount,
+                      categoryId: validated.categoryId,
+                      alertThreshold: validated.alertThreshold,
+                    }
+                  : {
+                      kind: 'expense',
+                      amount: validated.amount,
+                      categoryId: validated.categoryId,
+                      subcategoryId: overrideSubcategoryId,
+                      description: validated.description,
+                    }
             )
           }
           style={[styles.button, { backgroundColor: Colors[colorScheme].primary }]}

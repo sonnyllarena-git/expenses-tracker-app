@@ -1,5 +1,5 @@
 import { parseAssistantMessage, validateSuggestedAction } from '../suggestedAction';
-import type { Category } from '@/types';
+import type { Category, Subcategory } from '@/types';
 
 const categories: Category[] = [
   {
@@ -8,6 +8,16 @@ const categories: Category[] = [
     name: 'Food',
     icon: 'fast-food',
     color: '#2D7F4A',
+    isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  },
+];
+
+const subcategories: Subcategory[] = [
+  {
+    id: 'sub-fastfood',
+    categoryId: 'cat-food',
+    name: 'Fast Food',
     isCustom: false,
     createdAt: '2026-08-01T00:00:00.000Z',
   },
@@ -53,6 +63,33 @@ describe('parseAssistantMessage', () => {
       alertThresholdText: '80',
     });
   });
+
+  it('extracts a subcategory when the AI recognized a merchant', () => {
+    const content =
+      '[SUGGEST_ACTION] expense:₱300 category:Food subcategory:Fast Food description:Jollibee [/SUGGEST_ACTION]';
+    const parsed = parseAssistantMessage(content);
+    expect(parsed.action).toEqual({
+      kind: 'expense',
+      amountText: '300',
+      categoryName: 'Food',
+      subcategoryName: 'Fast Food',
+      description: 'Jollibee',
+    });
+  });
+
+  it('extracts the suggested wallet action and strips the tag from display text', () => {
+    const content =
+      "Got it! Here's what I'll add:\n\n" +
+      '[SUGGEST_ACTION] wallet:₱1000 type:gcash name:GCash [/SUGGEST_ACTION]';
+    const parsed = parseAssistantMessage(content);
+    expect(parsed.displayText).toBe("Got it! Here's what I'll add:");
+    expect(parsed.action).toEqual({
+      kind: 'wallet',
+      amountText: '1000',
+      walletTypeText: 'gcash',
+      walletName: 'GCash',
+    });
+  });
 });
 
 describe('validateSuggestedAction', () => {
@@ -67,8 +104,41 @@ describe('validateSuggestedAction', () => {
       amount: 500,
       categoryId: 'cat-food',
       categoryName: 'Food',
+      subcategoryId: null,
+      subcategoryName: null,
       description: 'Coffee',
     });
+  });
+
+  it('resolves a recognized subcategory name to its id', () => {
+    const result = validateSuggestedAction(
+      {
+        kind: 'expense',
+        amountText: '300',
+        categoryName: 'Food',
+        subcategoryName: 'Fast Food',
+        description: 'Jollibee',
+      },
+      categories,
+      subcategories
+    );
+    expect(result.valid && result.kind === 'expense' && result.subcategoryId).toBe('sub-fastfood');
+  });
+
+  it('omits the subcategory rather than failing when the AI guessed one that does not exist', () => {
+    const result = validateSuggestedAction(
+      {
+        kind: 'expense',
+        amountText: '300',
+        categoryName: 'Food',
+        subcategoryName: 'Not A Real Subcategory',
+        description: 'Jollibee',
+      },
+      categories,
+      subcategories
+    );
+    expect(result.valid).toBe(true);
+    expect(result.valid && result.kind === 'expense' && result.subcategoryId).toBeNull();
   });
 
   it('falls back to a generic description when none was given', () => {
@@ -122,5 +192,27 @@ describe('validateSuggestedAction', () => {
       categories
     );
     expect(result.valid && result.kind === 'budget' && result.alertThreshold).toBe(0.8);
+  });
+
+  it('resolves a valid wallet action without requiring a category', () => {
+    const result = validateSuggestedAction(
+      { kind: 'wallet', amountText: '1000', walletTypeText: 'gcash', walletName: 'GCash' },
+      categories
+    );
+    expect(result).toEqual({
+      valid: true,
+      kind: 'wallet',
+      amount: 1000,
+      walletType: 'gcash',
+      walletName: 'GCash',
+    });
+  });
+
+  it('rejects a wallet type that does not exist', () => {
+    const result = validateSuggestedAction(
+      { kind: 'wallet', amountText: '1000', walletTypeText: 'monopoly_money', walletName: '' },
+      categories
+    );
+    expect(result).toEqual({ valid: false, error: 'Wallet type "monopoly_money" doesn\'t exist.' });
   });
 });

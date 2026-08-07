@@ -1,6 +1,6 @@
 import { buildChatContext, type ChatContextData } from '../aiContext';
 import { generateMockResponse } from '../mockLlm';
-import type { Budget, Category, Expense, Loan, Wallet } from '@/types';
+import type { Budget, Category, Expense, Loan, Subcategory, Wallet } from '@/types';
 
 function makeExpense(overrides: Partial<Expense>): Expense {
   return {
@@ -9,6 +9,7 @@ function makeExpense(overrides: Partial<Expense>): Expense {
     addedByUserId: null,
     amount: 100,
     categoryId: 'cat-food',
+    subcategoryId: null,
     date: '2026-08-01',
     description: '',
     tags: [],
@@ -56,6 +57,46 @@ const categories: Category[] = [
     isCustom: false,
     createdAt: '2026-08-01T00:00:00.000Z',
   },
+  {
+    id: 'cat-utilities',
+    userId: 'user-1',
+    name: 'Utilities',
+    icon: 'flash',
+    color: '#F59E0B',
+    isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  },
+];
+
+const subcategories: Subcategory[] = [
+  {
+    id: 'sub-fastfood',
+    categoryId: 'cat-food',
+    name: 'Fast Food',
+    isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  },
+  {
+    id: 'sub-jollibee',
+    categoryId: 'cat-food',
+    name: 'Jollibee',
+    isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  },
+  {
+    id: 'sub-gas',
+    categoryId: 'cat-transport',
+    name: 'Gas/Petrol',
+    isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  },
+  {
+    id: 'sub-netflix',
+    categoryId: 'cat-utilities',
+    name: 'Netflix',
+    isCustom: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  },
 ];
 
 const wallets: Wallet[] = [
@@ -98,6 +139,7 @@ function makeContext(overrides: {
   return buildChatContext({
     expenses: overrides.expenses ?? [],
     categories,
+    subcategories,
     budgets: overrides.budgets ?? [],
     wallets,
     loans,
@@ -179,6 +221,30 @@ describe('generateMockResponse', () => {
     );
   });
 
+  it('auto-fills category AND subcategory when a merchant is recognized ("spent 599 on netflix")', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('spent 599 on netflix', context);
+    expect(response).toContain(
+      '[SUGGEST_ACTION] expense:₱599 category:Utilities subcategory:Netflix description:'
+    );
+  });
+
+  it('maps a merchant to its mapped subcategory even when a same-named literal subcategory also exists', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 300 jollibee', context);
+    expect(response).toContain(
+      '[SUGGEST_ACTION] expense:₱300 category:Food subcategory:Fast Food description:'
+    );
+  });
+
+  it('recognizes a brand not itself a literal subcategory name (Shell -> Gas/Petrol)', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 500 shell gas', context);
+    expect(response).toContain(
+      '[SUGGEST_ACTION] expense:₱500 category:Transport subcategory:Gas/Petrol description:'
+    );
+  });
+
   it('asks a clarifying question instead of guessing the category', () => {
     const context = makeContext({});
     const response = generateMockResponse('Add ₱500 to my expenses', context);
@@ -218,6 +284,49 @@ describe('generateMockResponse', () => {
     const response = generateMockResponse('set a ₱2000 budget', context);
     expect(response).not.toContain('[SUGGEST_ACTION]');
     expect(response).toContain('Which category should it apply to?');
+  });
+
+  it('treats "add 500 to gcash" as a wallet operation, never asking for a category', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 500 to gcash', context);
+    expect(response).not.toContain('Which category');
+    expect(response).toContain(
+      '[SUGGEST_ACTION] wallet:₱500 type:gcash name:GCash [/SUGGEST_ACTION]'
+    );
+  });
+
+  it('recognizes an explicit "wallet" mention with a named type', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 1000 to my wallet gcash', context);
+    expect(response).not.toContain('Which category');
+    expect(response).toContain(
+      '[SUGGEST_ACTION] wallet:₱1000 type:gcash name:GCash [/SUGGEST_ACTION]'
+    );
+  });
+
+  it('asks only for the wallet type when a wallet is mentioned without one, never asking for a category', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 1000 to my wallet', context);
+    expect(response).not.toContain('[SUGGEST_ACTION]');
+    expect(response).not.toContain('category');
+    expect(response).toContain('Which wallet type?');
+    expect(response).toContain('GCash');
+  });
+
+  it('routes a differently-worded wallet top-up the same way', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('top up cash by 200', context);
+    expect(response).toContain(
+      '[SUGGEST_ACTION] wallet:₱200 type:cash name:Cash [/SUGGEST_ACTION]'
+    );
+  });
+
+  it('still treats a message naming a real category as an expense even if it happens to mention gcash', () => {
+    const context = makeContext({});
+    const response = generateMockResponse('add 500 for food using gcash', context);
+    expect(response).toContain(
+      '[SUGGEST_ACTION] expense:₱500 category:Food description:Food using gcash [/SUGGEST_ACTION]'
+    );
   });
 });
 
@@ -360,7 +469,7 @@ describe('generateMockResponse — Weeks 11-12 insight knowledge areas', () => {
       ],
     });
     const response = generateMockResponse('Give me a breakdown', context);
-    expect(response).toBe('Top categories: Food 75%, Transport 25%.');
+    expect(response).toBe('Top categories: Food 75%, Transport 25%. No spending on: Utilities.');
   });
 
   it('#10 reports which wallet gets used most, by transaction share', () => {

@@ -1,4 +1,4 @@
-import type { Budget, Category, Expense, Loan, Wallet } from '@/types';
+import type { Budget, Category, Expense, Loan, Subcategory, Wallet } from '@/types';
 import { spentForCategory } from '@/utils/budget';
 import { formatCurrency } from '@/utils/currency';
 import { formatMonthLabel, today as getToday } from '@/utils/date';
@@ -119,6 +119,7 @@ export function buildLoanContext(loans: Loan[], currency: string): string {
 export interface ChatContextData {
   expenses: Expense[];
   categories: Category[];
+  subcategories: Subcategory[];
   budgets: Budget[];
   wallets: Wallet[];
   loans: Loan[];
@@ -138,6 +139,7 @@ export interface ChatContextData {
 export function buildChatContext(input: {
   expenses: Expense[];
   categories: Category[];
+  subcategories?: Subcategory[];
   budgets: Budget[];
   wallets: Wallet[];
   loans: Loan[];
@@ -150,6 +152,7 @@ export function buildChatContext(input: {
   const {
     expenses,
     categories,
+    subcategories = [],
     budgets,
     wallets,
     loans,
@@ -170,6 +173,7 @@ export function buildChatContext(input: {
   return {
     expenses,
     categories,
+    subcategories,
     budgets,
     wallets,
     loans,
@@ -207,12 +211,26 @@ export function buildSystemPrompt(monthLabel: string): string {
     `12. Budget vs. actuals — a full per-category comparison grid.\n` +
     `If the user just greets you, lead with the single most urgent insight (an over-budget ` +
     `category, else an upcoming bill) before inviting a full breakdown.\n\n` +
+    `WALLETS HAVE NO CATEGORY — never ask a wallet request "which category?". If the user ` +
+    `mentions the word "wallet" or names a wallet type (GCash, Cash, Credit Card, Debit Card, ` +
+    `Online Money, Bitcoin) while asking to add money, top up, or create one, that is a WALLET ` +
+    `operation, checked before budget or expense intent. If the wallet type isn't clear, ask ` +
+    `only "Which wallet type?" (never ask about category). Once the type is known, respond ` +
+    `with: [SUGGEST_ACTION] wallet:₱[amount] type:[type] name:[label] [/SUGGEST_ACTION].\n\n` +
     `If the word "budget" appears in the user's request AND they're asking you to set or add ` +
     `one, they mean a monthly budget LIMIT for a category, not an expense — respond with a ` +
     `structured suggestion in the format: [SUGGEST_ACTION] budget:₱[amount] category:[cat] ` +
     `alertThreshold:[pct] [/SUGGEST_ACTION] (default alertThreshold to 80 if unspecified). ` +
     `Otherwise, if the user asks you to add an expense, respond with: [SUGGEST_ACTION] ` +
-    `expense:₱[amount] category:[cat] description:[desc] [/SUGGEST_ACTION].`
+    `expense:₱[amount] category:[cat] description:[desc] [/SUGGEST_ACTION] — ask "which ` +
+    `category?" only for this expense case, never for a wallet operation.\n\n` +
+    `Recognize merchant/brand names and auto-fill both the category AND the matching ` +
+    `subcategory when one exists (e.g. "Netflix" -> Utilities > Netflix, "Jollibee" -> Food > ` +
+    `Fast Food, "Shell" -> Transport > Gas/Petrol) — add a subcategory field to the expense ` +
+    `suggestion: [SUGGEST_ACTION] expense:₱[amount] category:[cat] subcategory:[sub] ` +
+    `description:[desc] [/SUGGEST_ACTION]. Omit the subcategory field entirely when no merchant ` +
+    `is recognized — never guess one. The subcategory is always shown with a searchable picker ` +
+    `so the user can correct it before confirming if you picked wrong.`
   );
 }
 

@@ -5,6 +5,7 @@ import { useState, type ComponentProps } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 
 import { ChipPicker } from '@/components/ChipPicker';
+import { SubcategoryPicker } from '@/components/SubcategoryPicker';
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -24,6 +25,8 @@ const NO_WALLET = '__none__';
 export interface ExpenseFormValues {
   amount: number;
   categoryId: string;
+  /** Optional finer-grained classification within categoryId; null if not picked. */
+  subcategoryId: string | null;
   date: string;
   description: string;
   receiptPhotoPath: string | null;
@@ -47,6 +50,9 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
   const [amountText, setAmountText] = useState(initialExpense ? String(initialExpense.amount) : '');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     initialExpense?.categoryId ?? null
+  );
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(
+    initialExpense?.subcategoryId ?? null
   );
   const [dateText, setDateText] = useState(initialExpense?.date ?? today());
   const [description, setDescription] = useState(initialExpense?.description ?? '');
@@ -110,6 +116,7 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
       await onSubmit({
         amount,
         categoryId: selectedCategoryId,
+        subcategoryId: selectedSubcategoryId,
         date: dateText,
         description: description.trim(),
         receiptPhotoPath,
@@ -121,6 +128,7 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
       if (!initialExpense) {
         setAmountText('');
         setSelectedCategoryId(null);
+        setSelectedSubcategoryId(null);
         setDateText(today());
         setDescription('');
         setReceiptPhotoPath(null);
@@ -159,7 +167,14 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
           return (
             <Pressable
               key={category.id}
-              onPress={() => setSelectedCategoryId(category.id)}
+              onPress={() => {
+                // Subcategories belong to a category — dropped when switching
+                // to a different one, kept when re-tapping the same one.
+                if (category.id !== selectedCategoryId) {
+                  setSelectedSubcategoryId(null);
+                }
+                setSelectedCategoryId(category.id);
+              }}
               style={[
                 styles.categoryChip,
                 { borderColor: category.color },
@@ -178,6 +193,17 @@ export function ExpenseForm({ initialExpense, submitLabel, onSubmit }: ExpenseFo
           );
         })}
       </View>
+
+      {selectedCategoryId && (
+        <>
+          <Text style={styles.label}>Subcategory</Text>
+          <SubcategoryPicker
+            categoryId={selectedCategoryId}
+            value={selectedSubcategoryId}
+            onChange={setSelectedSubcategoryId}
+          />
+        </>
+      )}
 
       <Text style={styles.label}>Date</Text>
       <TextInput

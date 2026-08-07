@@ -13,6 +13,7 @@ import { useIncomeStore } from '@/store/useIncomeStore';
 import { useLoanStore } from '@/store/useLoanStore';
 import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useSubcategoryStore } from '@/store/useSubcategoryStore';
 import { useWalletStore } from '@/store/useWalletStore';
 
 function StatusScreen({ title, message }: { title?: string; message?: string }) {
@@ -66,8 +67,9 @@ function MigrationGate({ children }: PropsWithChildren) {
 
 /**
  * Loads the single local account, then its categories (seeding the default
- * set on first launch), materializes any due recurring expenses, then loads
- * expenses (picking up both prior and newly-materialized rows in one load),
+ * set on first launch) and their subcategories (same seed-on-first-launch
+ * idiom), materializes any due recurring expenses, then loads expenses
+ * (picking up both prior and newly-materialized rows in one load),
  * then the recurring templates themselves, then income, then wallets, then
  * loans, then budgets — budgets are loaded here (not just lazily by the
  * Dashboard/Reports screens) so the global AI chat has full context
@@ -83,6 +85,7 @@ function BootstrapGate({ children }: PropsWithChildren) {
       try {
         const account = await useSettingsStore.getState().init();
         await useCategoryStore.getState().load(account.id);
+        await useSubcategoryStore.getState().load(useCategoryStore.getState().categories);
         await useRecurringStore.getState().materialize(account.id);
         await useExpenseStore.getState().load(account.id);
         await useRecurringStore.getState().load(account.id);

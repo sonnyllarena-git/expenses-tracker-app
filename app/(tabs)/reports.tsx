@@ -14,6 +14,7 @@ import { useBudgetStore } from '@/store/useBudgetStore';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useSubcategoryStore } from '@/store/useSubcategoryStore';
 import { useWalletStore } from '@/store/useWalletStore';
 import { theme } from '@/theme';
 import type { Budget } from '@/types';
@@ -25,6 +26,7 @@ import {
   budgetVsActual,
   groupExpensesByCategory,
   groupExpensesByDay,
+  groupExpensesBySubcategory,
   groupExpensesByWallet,
   groupExpensesByWeek,
   topWalletByWeek,
@@ -70,6 +72,7 @@ const ALERT_THRESHOLD_OPTIONS: ChipOption<string>[] = [
 export default function ReportsScreen() {
   const account = useSettingsStore((state) => state.account);
   const categories = useCategoryStore((state) => state.categories);
+  const subcategories = useSubcategoryStore((state) => state.subcategories);
   const expenses = useExpenseStore((state) => state.expenses);
   const wallets = useWalletStore((state) => state.wallets);
   const budgets = useBudgetStore((state) => state.budgets);
@@ -82,6 +85,7 @@ export default function ReportsScreen() {
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonth());
   const [reportView, setReportView] = useState<ReportView>('monthly');
   const [distributionSort, setDistributionSort] = useState<DistributionSort>('amount');
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(initialBudgetForm);
   const [savingBudget, setSavingBudget] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -101,6 +105,17 @@ export default function ReportsScreen() {
   const distributionRows = [...categorySlices].sort((a, b) =>
     distributionSort === 'name' ? a.name.localeCompare(b.name) : b.value - a.value
   );
+
+  const subcategorySlices = expandedCategoryId
+    ? groupExpensesBySubcategory(expenses, subcategories, expandedCategoryId, month)
+    : [];
+  const subcategoryTotal = subcategorySlices.reduce((sum, slice) => sum + slice.value, 0);
+  const subcategoryColorFor = (index: number) =>
+    theme.categoryPalette[index % theme.categoryPalette.length];
+  const subcategoryPieData = subcategorySlices.map((slice, index) => ({
+    value: slice.value,
+    color: subcategoryColorFor(index),
+  }));
 
   const dailyPoints = groupExpensesByDay(expenses, month);
   const weeklyPoints = groupExpensesByWeek(expenses, month);
@@ -287,22 +302,74 @@ export default function ReportsScreen() {
                 % of total
               </Text>
             </View>
-            {distributionRows.map((slice) => (
-              <View key={slice.categoryId} style={styles.distributionRow}>
-                <View style={[styles.distributionCategoryCol, styles.distributionCategoryCell]}>
-                  <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                  <Text style={styles.distributionText} numberOfLines={1}>
-                    {slice.name}
-                  </Text>
+            {distributionRows.map((slice) => {
+              const isExpanded = expandedCategoryId === slice.categoryId;
+              return (
+                <View key={slice.categoryId}>
+                  <Pressable
+                    onPress={() => setExpandedCategoryId(isExpanded ? null : slice.categoryId)}
+                    style={styles.distributionRow}
+                  >
+                    <View style={[styles.distributionCategoryCol, styles.distributionCategoryCell]}>
+                      <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                      <Text style={styles.distributionText} numberOfLines={1}>
+                        {slice.name}
+                      </Text>
+                    </View>
+                    <Text style={[styles.distributionText, styles.distributionAmountCol]}>
+                      {formatCurrency(slice.value, currency)}
+                    </Text>
+                    <Text style={[styles.distributionText, styles.distributionPercentCol]}>
+                      {monthTotal > 0 ? Math.round((slice.value / monthTotal) * 100) : 0}%
+                    </Text>
+                    <Ionicons
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={Colors[colorScheme].text}
+                      style={styles.distributionChevron}
+                    />
+                  </Pressable>
+
+                  {isExpanded && (
+                    <View style={styles.subcategoryPanel}>
+                      {subcategorySlices.length > 0 ? (
+                        <>
+                          <View style={styles.pieSideBySideRow}>
+                            <PieChart
+                              data={subcategoryPieData}
+                              donut
+                              radius={44}
+                              innerRadius={26}
+                              centerLabelComponent={() => (
+                                <Text style={styles.pieCenterLabelSmall}>
+                                  {formatCurrency(subcategoryTotal, currency)}
+                                </Text>
+                              )}
+                            />
+                            <View style={styles.legendColumn}>
+                              {subcategorySlices.map((sub, index) => (
+                                <Text
+                                  key={sub.subcategoryId ?? 'uncategorized'}
+                                  style={styles.subcategoryRowText}
+                                  numberOfLines={1}
+                                >
+                                  {index === subcategorySlices.length - 1 ? '└─' : '├─'}{' '}
+                                  <Text style={{ color: subcategoryColorFor(index) }}>●</Text>{' '}
+                                  {truncateLabel(sub.name, 16)} ·{' '}
+                                  {formatCurrency(sub.value, currency)}
+                                </Text>
+                              ))}
+                            </View>
+                          </View>
+                        </>
+                      ) : (
+                        <Text style={styles.emptyText}>No subcategory data for this category.</Text>
+                      )}
+                    </View>
+                  )}
                 </View>
-                <Text style={[styles.distributionText, styles.distributionAmountCol]}>
-                  {formatCurrency(slice.value, currency)}
-                </Text>
-                <Text style={[styles.distributionText, styles.distributionPercentCol]}>
-                  {monthTotal > 0 ? Math.round((slice.value / monthTotal) * 100) : 0}%
-                </Text>
-              </View>
-            ))}
+              );
+            })}
           </>
         ) : (
           <Text style={styles.emptyText}>No expenses this month yet.</Text>
@@ -650,6 +717,17 @@ const styles = StyleSheet.create({
   },
   distributionText: {
     fontSize: 13,
+  },
+  distributionChevron: {
+    marginLeft: 6,
+  },
+  subcategoryPanel: {
+    paddingLeft: 18,
+    paddingBottom: 8,
+  },
+  subcategoryRowText: {
+    fontSize: 12,
+    opacity: 0.85,
   },
   weeklyUsageText: {
     fontSize: 13,

@@ -17,6 +17,7 @@ export function toExpense(row: typeof expenses.$inferSelect): Expense {
     addedByUserId: row.addedByUserId,
     amount: row.amount,
     categoryId: row.categoryId,
+    subcategoryId: row.subcategoryId,
     date: row.date,
     description: row.description,
     tags: JSON.parse(row.tags) as string[],
@@ -36,6 +37,8 @@ export interface NewExpenseInput {
   addedByUserId?: string | null;
   amount: number;
   categoryId: string;
+  /** Optional finer-grained classification within categoryId. */
+  subcategoryId?: string | null;
   date: string;
   description?: string;
   tags?: string[];
@@ -139,6 +142,7 @@ export async function insertExpense(input: NewExpenseInput): Promise<Expense> {
         addedByUserId: input.addedByUserId ?? null,
         amount: input.amount,
         categoryId: input.categoryId,
+        subcategoryId: input.subcategoryId ?? null,
         date: input.date,
         description: input.description ?? '',
         tags: JSON.stringify(input.tags ?? []),
@@ -167,6 +171,8 @@ export async function insertExpense(input: NewExpenseInput): Promise<Expense> {
 export interface UpdateExpenseInput {
   amount?: number;
   categoryId?: string;
+  /** Explicit `null` clears the subcategory; omit the key to leave it unchanged. */
+  subcategoryId?: string | null;
   date?: string;
   description?: string;
   tags?: string[];
@@ -191,6 +197,7 @@ export async function updateExpense(id: string, input: UpdateExpenseInput): Prom
     };
     if (input.amount !== undefined) values.amount = input.amount;
     if (input.categoryId !== undefined) values.categoryId = input.categoryId;
+    if (input.subcategoryId !== undefined) values.subcategoryId = input.subcategoryId;
     if (input.date !== undefined) values.date = input.date;
     if (input.description !== undefined) values.description = input.description;
     if (input.tags !== undefined) values.tags = JSON.stringify(input.tags);

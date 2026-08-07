@@ -37,12 +37,21 @@ export interface Category {
   createdAt: string;
 }
 
+export interface Subcategory {
+  id: string;
+  categoryId: string;
+  name: string;
+  isCustom: boolean;
+  createdAt: string;
+}
+
 export interface Expense {
   id: string;
   userId: string;
   addedByUserId: string | null;
   amount: number;
   categoryId: string;
+  subcategoryId: string | null;
   date: string;
   description: string;
   tags: string[];

@@ -11,7 +11,9 @@ import { upcomingRecurringExpenses } from '@/utils/dashboard';
 import { daysUntilPayday, formatDate, greetingForNow, nextPaydayDate, shiftDate } from '@/utils/date';
 import { budgetVsActual } from '@/utils/reports';
 import { weekOverWeekForCategory, weekOverWeekTotal } from '@/utils/trends';
-import type { Category } from '@/types';
+import { MERCHANT_SUBCATEGORY_MAP } from '@/constants/subcategories';
+import { WALLET_TYPE_OPTIONS } from '@/constants/wallets';
+import type { Category, Subcategory, WalletType } from '@/types';
 
 /**
  * Stands in for real on-device inference (llama.rn, deferred to a follow-up
@@ -21,7 +23,9 @@ import type { Category } from '@/types';
  * model would instead read the same data serialized in aiContext.ts's
  * `contextText` / buildFullPrompt.
  */
-const ADD_INTENT_PATTERN = /\b(add|log|record|track)\b/i;
+// "spent"/"paid" cover natural expense-logging phrasing like "spent 599 on
+// netflix" that doesn't use an explicit "add" verb.
+const ADD_INTENT_PATTERN = /\b(add|log|record|track|spent|paid)\b/i;
 const BUDGET_INTENT_PATTERN = /\b(add|log|record|track|set|create)\b/i;
 const BUDGET_KEYWORD_PATTERN = /\bbudget/i;
 const AMOUNT_PATTERN = /(?:₱|php)?\s*(\d[\d,]*(?:\.\d+)?)/i;
@@ -65,6 +69,31 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   Shopping: ['shopping', 'clothes', 'shoes', 'mall'],
 };
 
+// Wallets have no category, so "add"/"wallet" requests are routed here
+// instead of tryBuildSuggestedAction's expense flow — see the priority note
+// on tryBuildWalletSuggestedAction below.
+const WALLET_INTENT_PATTERN = /\b(add|log|record|track|set up|setup|create|top ?up)\b/i;
+const WALLET_MENTION_PATTERN = /\bwallets?\b/i;
+const WALLET_KEYWORDS: Record<WalletType, string[]> = {
+  gcash: ['gcash'],
+  credit_card: ['credit card', 'credit_card', 'creditcard'],
+  debit_card: ['debit card', 'debit_card', 'debitcard'],
+  cash: ['cash'],
+  online_money: ['online money', 'online_money', 'paymaya', 'maya', 'e-wallet', 'ewallet'],
+  bitcoin: ['bitcoin', 'btc', 'crypto'],
+  other: [],
+};
+
+function findWalletTypeByKeyword(message: string): WalletType | null {
+  const lower = message.toLowerCase();
+  for (const [type, keywords] of Object.entries(WALLET_KEYWORDS)) {
+    if (keywords.some((keyword) => lower.includes(keyword))) {
+      return type as WalletType;
+    }
+  }
+  return null;
+}
+
 const FALLBACK_RESPONSE =
   "I'm best at answering questions about your spending, budgets, wallets, and loans this month. " +
   'Try asking things like "How much did I spend on food?" or "What\'s my food budget?"';
@@ -83,6 +112,52 @@ function findCategoryByKeyword(message: string, categories: Category[]): Categor
 
   // Covers custom categories and names not in CATEGORY_KEYWORDS (e.g. "Loan Payment").
   return categories.find((c) => lower.includes(c.name.toLowerCase())) ?? null;
+}
+
+interface MerchantMatch {
+  category: Category;
+  subcategory: Subcategory;
+}
+
+/**
+ * Checked before the plain category-keyword match in tryBuildSuggestedAction
+ * so a recognized merchant auto-fills both category AND subcategory (e.g.
+ * "add 300 jollibee" -> Food > Fast Food). Checks MERCHANT_SUBCATEGORY_MAP
+ * first — it wins even over a subcategory of the same literal name (see that
+ * constant's doc comment) — then falls back to a generic scan for any of the
+ * user's real subcategory names mentioned directly (covers most of the
+ * brand-named defaults, e.g. "Netflix", "Meralco", "Uber", without needing an
+ * explicit mapping entry for each one). Subcategory names under 4 characters
+ * are skipped in the generic scan to avoid short-word false positives (e.g.
+ * "Bus").
+ */
+function findMerchantMatch(message: string, context: ChatContextData): MerchantMatch | null {
+  const lower = message.toLowerCase();
+
+  for (const mapping of MERCHANT_SUBCATEGORY_MAP) {
+    if (!lower.includes(mapping.keyword)) {
+      continue;
+    }
+    const category = context.categories.find((c) => c.name === mapping.categoryName);
+    const subcategory = context.subcategories.find(
+      (s) => s.categoryId === category?.id && s.name === mapping.subcategoryName
+    );
+    if (category && subcategory) {
+      return { category, subcategory };
+    }
+  }
+
+  for (const subcategory of context.subcategories) {
+    if (subcategory.name.length < 4 || !lower.includes(subcategory.name.toLowerCase())) {
+      continue;
+    }
+    const category = context.categories.find((c) => c.id === subcategory.categoryId);
+    if (category) {
+      return { category, subcategory };
+    }
+  }
+
+  return null;
 }
 
 function extractAmount(message: string): number | null {
@@ -110,6 +185,47 @@ function extractAlertThreshold(message: string): number {
   }
   const pct = Number(match[1]);
   return pct > 0 && pct <= 100 ? pct : DEFAULT_ALERT_THRESHOLD_PCT;
+}
+
+/**
+ * Checked before both the budget and expense builders so a message like "add
+ * 1000 to my wallet gcash" — which also matches the expense ADD_INTENT_PATTERN
+ * — is routed to a wallet suggestion instead of asking "which category?"
+ * (wallets have no category). Triggers on either the literal word "wallet" or
+ * a recognized wallet-type name (gcash, cash, credit card, ...). If the
+ * message also names a real category and doesn't say "wallet" explicitly,
+ * that's treated as an incidental payment-method mention on an expense
+ * (e.g. "add 500 for food using gcash") and this returns null so the expense
+ * flow handles it instead.
+ */
+function tryBuildWalletSuggestedAction(message: string, context: ChatContextData): string | null {
+  if (!WALLET_INTENT_PATTERN.test(message)) {
+    return null;
+  }
+  const mentionsWallet = WALLET_MENTION_PATTERN.test(message);
+  const walletType = findWalletTypeByKeyword(message);
+  if (!mentionsWallet && (!walletType || findCategoryByKeyword(message, context.categories))) {
+    return null;
+  }
+
+  const amount = extractAmount(message);
+  if (amount === null) {
+    return null;
+  }
+
+  if (!walletType) {
+    const names = WALLET_TYPE_OPTIONS.map((o) => o.label).join(', ');
+    return (
+      `Sure — I can add ${formatCurrency(amount, context.currency)} to a wallet. ` +
+      `Which wallet type? (${names})`
+    );
+  }
+
+  const label = WALLET_TYPE_OPTIONS.find((o) => o.value === walletType)?.label ?? walletType;
+  return (
+    `Got it! Here's what I'll add:\n\n` +
+    `[SUGGEST_ACTION] wallet:₱${amount} type:${walletType} name:${label} [/SUGGEST_ACTION]`
+  );
 }
 
 /**
@@ -151,6 +267,16 @@ function tryBuildSuggestedAction(message: string, context: ChatContextData): str
   const amount = extractAmount(message);
   if (amount === null) {
     return null;
+  }
+
+  const merchant = findMerchantMatch(message, context);
+  if (merchant) {
+    const description = extractDescription(message, merchant.category);
+    return (
+      `Got it! Here's what I'll add:\n\n` +
+      `[SUGGEST_ACTION] expense:₱${amount} category:${merchant.category.name} ` +
+      `subcategory:${merchant.subcategory.name} description:${description} [/SUGGEST_ACTION]`
+    );
   }
 
   const category = findCategoryByKeyword(message, context.categories);
@@ -527,6 +653,11 @@ function greetingAnswer(context: ChatContextData): string {
 
 /** Pattern-matches keywords in `message` and returns a templated, context-aware reply. */
 export function generateMockResponse(message: string, context: ChatContextData): string {
+  const walletAction = tryBuildWalletSuggestedAction(message, context);
+  if (walletAction) {
+    return walletAction;
+  }
+
   const budgetAction = tryBuildBudgetSuggestedAction(message, context);
   if (budgetAction) {
     return budgetAction;

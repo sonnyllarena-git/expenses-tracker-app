@@ -1,6 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View as RNView } from 'react-native';
+import { useState, type ComponentProps } from 'react';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View as RNView,
+} from 'react-native';
 
 import { ChipPicker } from '@/components/ChipPicker';
 import { SettingsToggleRow } from '@/components/SettingsToggleRow';
@@ -9,8 +16,12 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { SUPPORTED_CURRENCIES } from '@/constants/currencies';
 import { useAIChatStore } from '@/store/useAIChatStore';
+import { useCategoryStore } from '@/store/useCategoryStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useSubcategoryStore } from '@/store/useSubcategoryStore';
 import type { AccountType } from '@/types';
+
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const ACCOUNT_TYPES: AccountType[] = ['personal', 'family', 'business'];
 
@@ -18,9 +29,14 @@ export default function SettingsScreen() {
   const account = useSettingsStore((state) => state.account);
   const updateAccount = useSettingsStore((state) => state.updateAccount);
   const resetAllData = useSettingsStore((state) => state.resetAllData);
+  const categories = useCategoryStore((state) => state.categories);
+  const addCustomSubcategory = useSubcategoryStore((state) => state.addCustomSubcategory);
   const colorScheme = useColorScheme();
   const [resetting, setResetting] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
+  const [newSubcategoryCategoryId, setNewSubcategoryCategoryId] = useState<string | null>(null);
+  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [savingSubcategory, setSavingSubcategory] = useState(false);
 
   function handleUpdateError(err: unknown) {
     Alert.alert('Failed to save', err instanceof Error ? err.message : 'Unknown error');
@@ -62,6 +78,28 @@ export default function SettingsScreen() {
         },
       ]
     );
+  }
+
+  async function handleAddCustomSubcategory() {
+    const name = newSubcategoryName.trim();
+    if (!newSubcategoryCategoryId) {
+      Alert.alert('Missing category', 'Select a category.');
+      return;
+    }
+    if (!name) {
+      Alert.alert('Missing name', 'Enter a subcategory name.');
+      return;
+    }
+    setSavingSubcategory(true);
+    try {
+      await addCustomSubcategory(newSubcategoryCategoryId, name);
+      setNewSubcategoryName('');
+      Alert.alert('Subcategory added', `"${name}" is now available in the dropdown.`);
+    } catch (err) {
+      Alert.alert('Failed to add subcategory', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setSavingSubcategory(false);
+    }
   }
 
   function handleClearChatHistory() {
@@ -200,6 +238,47 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
+        <Text style={styles.sectionLabel}>Add Custom Subcategory</Text>
+        <Text style={styles.paydayCaption}>
+          Pick a category, enter a name, and it&apos;ll show up in the subcategory dropdown right
+          after the defaults.
+        </Text>
+        <ChipPicker
+          options={categories.map((c) => ({
+            value: c.id,
+            label: c.name,
+            color: c.color,
+            icon: c.icon as IoniconName,
+          }))}
+          selectedValue={newSubcategoryCategoryId}
+          onSelect={setNewSubcategoryCategoryId}
+        />
+        <TextInput
+          style={[
+            styles.input,
+            { color: Colors[colorScheme].text, borderColor: Colors[colorScheme].border },
+          ]}
+          value={newSubcategoryName}
+          onChangeText={setNewSubcategoryName}
+          placeholder="Subcategory name"
+          placeholderTextColor={Colors[colorScheme].tabIconDefault}
+        />
+        <Pressable
+          onPress={handleAddCustomSubcategory}
+          disabled={savingSubcategory}
+          style={[
+            styles.submitButton,
+            { backgroundColor: Colors[colorScheme].primary },
+            savingSubcategory && styles.disabled,
+          ]}
+        >
+          <Text style={styles.submitButtonText}>
+            {savingSubcategory ? 'Saving…' : 'Add Subcategory'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].card }]}>
         <Text style={styles.sectionLabel}>Data</Text>
         <Pressable
           onPress={handleDeleteAll}
@@ -289,6 +368,23 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   dangerButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+  },
+  submitButton: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    color: '#fff',
     fontSize: 15,
     fontWeight: '700',
   },

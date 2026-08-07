@@ -38,6 +38,24 @@ export const categories = sqliteTable('categories', {
     .default(sql`(current_timestamp)`),
 });
 
+export const subcategories = sqliteTable(
+  'subcategories',
+  {
+    id: text('id').primaryKey(),
+    categoryId: text('category_id')
+      .notNull()
+      .references(() => categories.id),
+    name: text('name').notNull(),
+    // Distinguishes user-added rows from the DEFAULT_SUBCATEGORIES seed set
+    // (constants/subcategories.ts) — see db/queries/subcategories.ts.
+    isCustom: integer('is_custom', { mode: 'boolean' }).notNull().default(false),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index('idx_subcategories_category').on(table.categoryId)]
+);
+
 export const budgets = sqliteTable(
   'budgets',
   {
@@ -87,6 +105,9 @@ export const expenses = sqliteTable(
     categoryId: text('category_id')
       .notNull()
       .references(() => categories.id),
+    // Nullable — optional finer-grained classification within categoryId;
+    // see constants/subcategories.ts for the seeded defaults.
+    subcategoryId: text('subcategory_id').references(() => subcategories.id),
     date: text('date').notNull(),
     description: text('description').notNull().default(''),
     // SQLite has no array type; stored as a JSON-encoded string array.

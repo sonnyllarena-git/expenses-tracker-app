@@ -8,7 +8,8 @@ import {
 } from '@/db/queries/chatMessages';
 import { useBudgetStore } from '@/store/useBudgetStore';
 import { useExpenseStore } from '@/store/useExpenseStore';
-import type { ChatMessage, SuggestedActionStatus } from '@/types';
+import { useWalletStore } from '@/store/useWalletStore';
+import type { ChatMessage, SuggestedActionStatus, WalletType } from '@/types';
 import type { ChatContextData } from '@/utils/aiContext';
 import { currentMonth, today } from '@/utils/date';
 import type { BubbleCorner } from '@/utils/dragCorner';
@@ -79,6 +80,7 @@ interface ConfirmExpenseInput {
   messageId: string;
   amount: number;
   categoryId: string;
+  subcategoryId: string | null;
   description: string;
   historyEnabled: boolean;
 }
@@ -93,7 +95,17 @@ interface ConfirmBudgetInput {
   historyEnabled: boolean;
 }
 
-type ConfirmActionInput = ConfirmExpenseInput | ConfirmBudgetInput;
+interface ConfirmWalletInput {
+  kind: 'wallet';
+  userId: string;
+  messageId: string;
+  amount: number;
+  walletType: WalletType;
+  walletName: string;
+  historyEnabled: boolean;
+}
+
+type ConfirmActionInput = ConfirmExpenseInput | ConfirmBudgetInput | ConfirmWalletInput;
 
 interface CancelActionInput {
   messageId: string;
@@ -159,13 +171,13 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
     });
   },
   confirmAction: async (input) => {
-    const { userId, messageId, amount, categoryId, historyEnabled } = input;
+    const { userId, messageId, amount, historyEnabled } = input;
 
     if (input.kind === 'budget') {
       const month = currentMonth();
       const existing = useBudgetStore
         .getState()
-        .budgets.find((b) => b.categoryId === categoryId && b.month === month);
+        .budgets.find((b) => b.categoryId === input.categoryId && b.month === month);
       if (existing) {
         await useBudgetStore.getState().editBudget(existing.id, {
           limitAmount: amount,
@@ -174,17 +186,34 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
       } else {
         await useBudgetStore.getState().addBudget({
           userId,
-          categoryId,
+          categoryId: input.categoryId,
           limitAmount: amount,
           month,
           alertThreshold: input.alertThreshold,
+        });
+      }
+    } else if (input.kind === 'wallet') {
+      // "Add to wallet" tops up an existing wallet of that type rather than
+      // creating a duplicate; only creates a new one the first time.
+      const existing = useWalletStore.getState().wallets.find((w) => w.type === input.walletType);
+      if (existing) {
+        await useWalletStore.getState().editWallet(existing.id, {
+          balance: existing.balance + amount,
+        });
+      } else {
+        await useWalletStore.getState().addWallet({
+          userId,
+          name: input.walletName,
+          type: input.walletType,
+          balance: amount,
         });
       }
     } else {
       await useExpenseStore.getState().addExpense({
         userId,
         amount,
-        categoryId,
+        categoryId: input.categoryId,
+        subcategoryId: input.subcategoryId,
         date: today(),
         description: input.description,
       });

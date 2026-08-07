@@ -24,6 +24,7 @@ import { useExpenseStore } from '@/store/useExpenseStore';
 import { useLoanStore } from '@/store/useLoanStore';
 import { useRecurringStore } from '@/store/useRecurringStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useSubcategoryStore } from '@/store/useSubcategoryStore';
 import { useWalletStore } from '@/store/useWalletStore';
 import type { ChatMessage } from '@/types';
 import { buildChatContext } from '@/utils/aiContext';
@@ -135,6 +136,7 @@ export function ChatPanel({ onClose, headerPanHandlers }: ChatPanelProps) {
   const isLoading = useAIChatStore((state) => state.isLoading);
   const expenses = useExpenseStore((state) => state.expenses);
   const categories = useCategoryStore((state) => state.categories);
+  const subcategories = useSubcategoryStore((state) => state.subcategories);
   const budgets = useBudgetStore((state) => state.budgets);
   const wallets = useWalletStore((state) => state.wallets);
   const loans = useLoanStore((state) => state.loans);
@@ -154,6 +156,7 @@ export function ChatPanel({ onClose, headerPanHandlers }: ChatPanelProps) {
       context: buildChatContext({
         expenses,
         categories,
+        subcategories,
         budgets,
         wallets,
         loans,
@@ -177,13 +180,19 @@ export function ChatPanel({ onClose, headerPanHandlers }: ChatPanelProps) {
         historyEnabled: account.aiChatHistoryEnabled,
         ...resolved,
       });
-      const category = categories.find((c) => c.id === resolved.categoryId);
-      const categoryName = category?.name ?? '';
-      setToastMessage(
-        resolved.kind === 'budget'
-          ? `${formatCurrency(resolved.amount, account.currency)}/month ${categoryName} budget set`
-          : `${formatCurrency(resolved.amount, account.currency)} ${categoryName} expense added`
-      );
+      if (resolved.kind === 'wallet') {
+        setToastMessage(
+          `${formatCurrency(resolved.amount, account.currency)} added to ${resolved.walletName} wallet`
+        );
+      } else {
+        const category = categories.find((c) => c.id === resolved.categoryId);
+        const categoryName = category?.name ?? '';
+        setToastMessage(
+          resolved.kind === 'budget'
+            ? `${formatCurrency(resolved.amount, account.currency)}/month ${categoryName} budget set`
+            : `${formatCurrency(resolved.amount, account.currency)} ${categoryName} expense added`
+        );
+      }
     } catch (err) {
       Alert.alert('Failed to save', err instanceof Error ? err.message : 'Unknown error');
     }

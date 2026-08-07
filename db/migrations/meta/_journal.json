@@ -43,6 +43,13 @@
       "when": 1786042436158,
       "tag": "0005_tired_kate_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786134271784,
+      "tag": "0006_harsh_newton_destine",
+      "breakpoints": true
     }
   ]
 }

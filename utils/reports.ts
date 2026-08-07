@@ -1,5 +1,5 @@
 import { theme } from '@/theme';
-import type { Budget, Category, Expense, Wallet } from '@/types';
+import type { Budget, Category, Expense, Subcategory, Wallet } from '@/types';
 import { daysInMonth } from '@/utils/date';
 
 const UNASSIGNED_WALLET_KEY = '__unassigned__';
@@ -46,6 +46,53 @@ export function groupExpensesByCategory(
       color: category?.color ?? theme.categoryFallback,
       value,
     });
+  }
+
+  return slices.sort((a, b) => b.value - a.value);
+}
+
+export interface SubcategorySlice {
+  /** Null for the "Uncategorized" bucket (expenses in this category with no subcategoryId). */
+  subcategoryId: string | null;
+  name: string;
+  value: number;
+}
+
+export const UNCATEGORIZED_SUBCATEGORY_LABEL = 'Uncategorized';
+
+/**
+ * Sums the given month's expenses in one category by subcategory, sorted
+ * descending by amount. Expenses with no subcategoryId are grouped into an
+ * "Uncategorized" bucket instead of being dropped, mirroring
+ * groupExpensesByWallet's "Unassigned" bucket for the same reason.
+ */
+export function groupExpensesBySubcategory(
+  expenses: Expense[],
+  subcategories: Subcategory[],
+  categoryId: string,
+  month: string
+): SubcategorySlice[] {
+  const UNASSIGNED_KEY = '__uncategorized__';
+  const totals = new Map<string, number>();
+  for (const expense of expenses) {
+    if (expense.categoryId !== categoryId || !expense.date.startsWith(month)) {
+      continue;
+    }
+    const key = expense.subcategoryId ?? UNASSIGNED_KEY;
+    totals.set(key, (totals.get(key) ?? 0) + expense.amount);
+  }
+
+  const slices: SubcategorySlice[] = [];
+  for (const [key, value] of totals) {
+    if (value <= 0) {
+      continue;
+    }
+    if (key === UNASSIGNED_KEY) {
+      slices.push({ subcategoryId: null, name: UNCATEGORIZED_SUBCATEGORY_LABEL, value });
+    } else {
+      const subcategory = subcategories.find((s) => s.id === key);
+      slices.push({ subcategoryId: key, name: subcategory?.name ?? 'Unknown', value });
+    }
   }
 
   return slices.sort((a, b) => b.value - a.value);

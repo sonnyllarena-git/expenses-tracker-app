@@ -16,6 +16,7 @@ function makeExpense(overrides: Partial<Expense>): Expense {
     addedByUserId: null,
     amount: 100,
     categoryId: 'cat-food',
+    subcategoryId: null,
     date: '2026-08-01',
     description: '',
     tags: [],
